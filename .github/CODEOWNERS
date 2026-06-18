@@ -1,0 +1,15 @@
+# Default owners for everything
+* @ljiang-slac
+
+# Frontend code
+/src/**/*.js @ljiang-slac
+/src/**/*.jsx @ljiang-slac
+
+# Python code
+*.py @ljiang-slac
+
+# CI/CD workflows
+/.github/workflows/ @ljiang-slac
+
+# Documentation
+*.md @ljiang-slac
