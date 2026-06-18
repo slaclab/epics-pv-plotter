@@ -1,0 +1,25 @@
+/* src/components/PlotGrid.css */
+.plot-grid-container {
+  flex: 1;
+  overflow: auto;
+  background: #f0f2f5;
+  padding: 1rem;
+}
+
+.plot-grid {
+  position: relative;
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top;
+}
+
+.react-grid-item.resizing {
+  transition: none;
+  z-index: 100;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 100;
