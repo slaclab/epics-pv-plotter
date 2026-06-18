@@ -7,28 +7,39 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  issues: write
 
 jobs:
-  copilot-review:
+  copilot-reminder:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Add Copilot Review Reminder
+        uses: actions/github-script@v7
         with:
-          fetch-depth: 0
-
-      - name: Copilot Code Review
-        uses: github/copilot-code-review-action@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          include-patterns: |
-            **/*.js
-            **/*.jsx
-            **/*.py
-            **/*.ts
-            **/*.tsx
-          exclude-patterns: |
-            **/node_modules/**
-            **/dist/**
-            **/build/**
+          script: |
+            const comment = `## 🤖 GitHub Copilot Review Available
+            
+            This PR can be reviewed using GitHub Copilot. To use it:
+            
+            ### In GitHub Web Interface:
+            1. Click on the "Files changed" tab
+            2. Use the Copilot button to review changes
+            3. Or comment: \`@github-copilot review this PR\`
+            
+            ### In VS Code:
+            1. Install GitHub Copilot extension
+            2. Open the PR in VS Code
+            3. Use Copilot chat to review changes
+            
+            ### Automated Checks:
+            - ✅ Security scanning with Trivy and CodeQL
+            - ✅ Code quality analysis (ESLint, Prettier, Black, Flake8)
+            - ✅ Type checking (MyPy)
+            
+            All automated checks are running on this PR.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
