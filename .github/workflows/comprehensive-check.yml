@@ -10,23 +10,8 @@ permissions:
   contents: read
   pull-requests: write
   security-events: write
-  issues: write
 
 jobs:
-  copilot-review:
-    name: Copilot Code Review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Copilot Review
-        uses: github/copilot-code-review-action@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
   security-scan:
     name: Security Scanning
     runs-on: ubuntu-latest
@@ -41,8 +26,9 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
       
-      - name: Upload Trivy results to GitHub Security
+      - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -55,18 +41,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
       
       - name: Install dependencies
         run: npm ci
       
       - name: Run ESLint
-        run: npm run lint || true
+        run: npm run lint
         continue-on-error: true
       
       - name: Run Prettier check
-        run: npx prettier --check "src/**/*.{js,jsx,css}" || true
+        run: npm run format:check
         continue-on-error: true
       
       - name: Build project
@@ -84,27 +70,26 @@ jobs:
           python-version: '3.11'
       
       - name: Install analysis tools
-        run: |
-          pip install black flake8 pylint mypy bandit
+        run: pip install black flake8 pylint mypy bandit
       
-      - name: Run Black formatter check
-        run: black --check *.py || true
+      - name: Run Black
+        run: black --check *.py
         continue-on-error: true
       
       - name: Run Flake8
-        run: flake8 *.py --max-line-length=100 --statistics || true
+        run: flake8 *.py --max-line-length=100
         continue-on-error: true
       
       - name: Run Pylint
-        run: pylint *.py --disable=all --enable=E,F || true
+        run: pylint *.py --disable=all --enable=E,F
         continue-on-error: true
       
-      - name: Run Bandit security check
-        run: bandit -r *.py -f json -o bandit-report.json || true
+      - name: Run Bandit
+        run: bandit -r *.py
         continue-on-error: true
       
-      - name: Run MyPy type check
-        run: mypy *.py --ignore-missing-imports || true
+      - name: Run MyPy
+        run: mypy *.py --ignore-missing-imports
         continue-on-error: true
 
   codeql:
@@ -128,3 +113,5 @@ jobs:
       
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
