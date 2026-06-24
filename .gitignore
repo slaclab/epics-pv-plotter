@@ -3,6 +3,9 @@ node_modules/
 
 # Python virtual environment
 venv/
+venv_prodlx2/
+venv_prodlx1_py311/
+venv_prodlx2_py311/
 *.pyc
 __pycache__/
 *.py[cod]

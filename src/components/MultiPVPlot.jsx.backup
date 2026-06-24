@@ -12,13 +12,14 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const [plotData, setPlotData] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState({});
   const [yAxisRange, setYAxisRange] = useState(null);
-  const [revision, setRevision] = useState(0); // Force plot updates
   const buffersRef = useRef({});
   const websocketsRef = useRef({});
   const updateTimerRef = useRef(null);
   const { removePlot, removePVFromPlot } = usePlotStore();
 
-  // Export data function
+  // ============================================================
+  // Export Data Function
+  // ============================================================
   const exportData = (pvName) => {
     const buffer = buffersRef.current[pvName];
     
@@ -29,34 +30,42 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     
     const data = buffer.getData();
     
+    // Create CSV content
     const csv = ['Timestamp,Value']
       .concat(data.x.map((time, i) => 
         `${time.toISOString()},${data.y[i]}`
       ))
       .join('\n');
     
+    // Create and download file
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     
+    // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     link.download = `${pvName}_${timestamp}.csv`;
     
+    // Trigger download
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // Clean up
     URL.revokeObjectURL(url);
     
     console.log(`✅ Exported ${data.x.length} data points for ${pvName}`);
   };
 
+  // Export all PVs in this plot
   const exportAllData = () => {
     if (pvNames.length === 1) {
       exportData(pvNames[0]);
       return;
     }
 
+    // For multiple PVs, create a combined CSV
     const allData = pvNames.map(pvName => {
       const buffer = buffersRef.current[pvName];
       return buffer ? buffer.getData() : { x: [], y: [] };
@@ -67,7 +76,10 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       return;
     }
 
+    // Create header
     const header = ['Timestamp'].concat(pvNames.map(pv => `${pv}_Value`));
+    
+    // Find all unique timestamps
     const allTimestamps = new Set();
     allData.forEach(data => {
       data.x.forEach(time => allTimestamps.add(time.getTime()));
@@ -75,6 +87,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     
     const sortedTimestamps = Array.from(allTimestamps).sort();
     
+    // Create rows
     const rows = sortedTimestamps.map(timestamp => {
       const row = [new Date(timestamp).toISOString()];
       
@@ -89,6 +102,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
 
     const csv = [header.join(',')].concat(rows).join('\n');
     
+    // Download
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -105,10 +119,10 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     console.log(`✅ Exported data for ${pvNames.length} PVs`);
   };
 
-  // Initialize buffers and websockets
+  // ============================================================
+  // Initialize buffers and websockets for each PV
+  // ============================================================
   useEffect(() => {
-    console.log(`🔧 Initializing plot for PVs:`, pvNames);
-    
     pvNames.forEach((pvName) => {
       if (!buffersRef.current[pvName]) {
         buffersRef.current[pvName] = new DataBuffer(PLOT_CONFIG.MAX_POINTS);
@@ -116,7 +130,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         const ws = new PVWebSocket(
           pvName,
           (value, timestamp) => {
-            buffersRef.current[pvName].addPoint(value, timestamp);
+            buffersRef.current[pvName].addPoint(value, timestamp || Date.now());
           },
           (error) => {
             console.error(`Error for ${pvName}:`, error);
@@ -147,11 +161,8 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       }
     });
 
-    // Periodic plot update
-    let updateCount = 0;
+    // Periodic update for plot rendering
     updateTimerRef.current = setInterval(() => {
-      updateCount++;
-      
       const traces = pvNames.map((pvName) => {
         const buffer = buffersRef.current[pvName];
         const data = buffer ? buffer.getData() : { x: [], y: [] };
@@ -167,7 +178,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         };
       });
 
-      // Calculate Y-axis range
+      // Calculate Y-axis range based on all data
       let allValues = [];
       pvNames.forEach((pvName) => {
         const buffer = buffersRef.current[pvName];
@@ -186,27 +197,12 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         setYAxisRange([min - padding, max + padding]);
       }
 
-      // Log update info every 10 updates
-      if (updateCount % 10 === 0) {
-        const totalPoints = pvNames.reduce((sum, pvName) => {
-          const buffer = buffersRef.current[pvName];
-          return sum + (buffer ? buffer.getPointCount() : 0);
-        }, 0);
-        console.log(`🔄 Plot update #${updateCount}: ${totalPoints} total points across ${pvNames.length} PV(s)`);
-      }
-
       setPlotData(traces);
-      setRevision(prev => prev + 1); // Force plot re-render
-      
     }, PLOT_CONFIG.UPDATE_INTERVAL);
 
-    console.log(`✅ Plot update timer started (interval: ${PLOT_CONFIG.UPDATE_INTERVAL}ms)`);
-
     return () => {
-      console.log(`🛑 Cleaning up plot for:`, pvNames);
       if (updateTimerRef.current) {
         clearInterval(updateTimerRef.current);
-        console.log(`✅ Plot update timer stopped`);
       }
       Object.values(websocketsRef.current).forEach((ws) => ws.disconnect());
     };
@@ -223,10 +219,11 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     }
   };
 
+  // Enhanced plot layout
   const plotLayout = {
     ...PLOT_LAYOUT_TEMPLATE,
     title: pvNames.length === 1 ? pvNames[0] : 'Multi-PV Plot',
-    datarevision: revision, // Force Plotly to update
+    uirevision: 'true',
     yaxis: {
       ...PLOT_LAYOUT_TEMPLATE.yaxis,
       autorange: yAxisRange ? false : true,
@@ -250,11 +247,6 @@ export default function MultiPVPlot({ plotId, pvNames }) {
             <div key={pvName} className="pv-tag">
               {getStatusIcon(connectionStatus[pvName])}
               <span className="pv-name">{pvName}</span>
-              {buffersRef.current[pvName] && (
-                <span className="pv-count">
-                  ({buffersRef.current[pvName].getPointCount()})
-                </span>
-              )}
               {pvNames.length > 1 && (
                 <button
                   className="pv-remove"
@@ -269,6 +261,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         </div>
 
         <div className="plot-actions">
+          {/* Export Button */}
           <button
             className="plot-action-btn"
             onClick={exportAllData}
@@ -277,6 +270,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
             <Download size={16} />
           </button>
 
+          {/* Close Button */}
           <button
             className="plot-close"
             onClick={() => removePlot(plotId)}

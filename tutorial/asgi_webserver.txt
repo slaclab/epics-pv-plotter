@@ -1,0 +1,119 @@
+what is uvicorn:
+	uvicorn = ASGI web server implementation, code allows the rules of ASGI
+what is ASGI:
+	ASGI = Asynchronous Server Gateway Interface
+	ASGI : protocal/specification, a set of rules
+	
+	history
+		WSGI -> ASGI
+			WSGI (2003): 
+				Web Server Gateway Interface - PEP 3333
+				Used by Flask, Django(traditional) ...	
+			ASIG (2016): 
+				Used by Fast API, Quart, Django 3.0+ ...
+
+
+ASGI in FastAPI:
+	* FastAPI is a typical ASGI Application, which means it follows the ASGI rules
+	* For example:
+		1. must be an awaitable callable acception(scope, receive, send), 
+			scope: dictionary, defines the connection type 
+			receive: accept the client request 
+			send:  send response to client
+			        # Handle different connection/scope types (ASGI spec)
+			        if scope['type'] == 'lifespan':
+			            # Application startup/shutdown events
+			            await self.handle_lifespan(scope, receive, send)
+        
+			        elif scope['type'] == 'http':
+			            # HTTP request handling
+			            await self.handle_http(scope, receive, send)
+        
+				elif scope['type'] == 'websocket':
+			            # WebSocket connection handling
+			            await self.handle_websocket(scope, receive, send)
+		2. uvicorn → ASGI → FastAPI
+			
+
+
+
+
+Restaurant Analogy:
+
+┌─────────────────────────────────────┐
+│ Customer (Client/Browser)           │
+└────────────┬────────────────────────┘
+             │ HTTP Request
+             ↓
+┌─────────────────────────────────────┐
+│ Waiter (uvicorn)                    │
+│ - Greets customer                   │
+│ - Takes order (receives request)    │
+│ - Delivers to kitchen               │
+│ - Brings food back (sends response) │
+└────────────┬────────────────────────┘
+             │ ASGI Protocol
+             ↓
+┌─────────────────────────────────────┐
+│ Chef (FastAPI/Application)          │
+│ - Processes order (business logic)  │
+│ - Prepares food (generates response)│
+└─────────────────────────────────────┘
+
+Fast API: Modern Python Web framework (ASGI application)
+┌─────────────────────────────────────────────────────────┐
+│ Layer 5: Your Business Logic                           │
+│                                                         │
+│ @app.get("/")                                          │
+│ async def root():                                      │
+│     return {"message": "Hello"}                        │
+│                                                         │
+└────────────────────┬────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────┐
+│ Layer 4: FastAPI Framework                             │
+│                                                         │
+│ - Routing (path matching)                              │
+│ - Request parsing (JSON, form data)                    │
+│ - Data validation (Pydantic models)                    │
+│ - Response serialization                               │
+│ - Dependency injection                                 │
+│ - OpenAPI documentation generation                     │
+│                                                         │
+│ Implements:                                            │
+│ async def __call__(scope, receive, send): ...          │
+│                                                         │
+└────────────────────┬────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────┐
+│ Layer 3: ASGI Protocol (Interface Definition)          │
+│                                                         │
+│ Standard signature:                                     │
+│ async def app(scope, receive, send)                    │
+│                                                         │
+│ - scope: dict with request metadata                    │
+│ - receive: async callable to get client data           │
+│ - send: async callable to send response                │
+│                                                         │
+└────────────────────┬────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────┐
+│ Layer 2: uvicorn (ASGI Server)                         │
+│                                                         │
+│ - Listens on port 8000                                 │
+│ - Accepts TCP connections                              │
+│ - Parses HTTP protocol                                 │
+│ - Converts HTTP → ASGI scope dict                      │
+│ - Calls: await app(scope, receive, send)               │
+│ - Converts ASGI response → HTTP                        │
+│ - Sends bytes over network                             │
+│                                                         │
+└────────────────────┬────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────┐
+│ Layer 1: Network (TCP/IP)                              │
+│                                                         │
+│ Client (Browser) ⟷ Internet ⟷ Server                  │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+			
