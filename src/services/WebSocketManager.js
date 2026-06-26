@@ -1,13 +1,15 @@
 // src/services/WebSocketManager.js
+// To Manage a Single PV connection
+//
 import { WS_CONFIG } from '../utils/constants';
 
 export class PVWebSocket {
   constructor(pvName, onData, onError, onConnect) {
-    this.pvName = pvName;
-    this.onData = onData;
-    this.onError = onError;
-    this.onConnect = onConnect;
-    this.ws = null;
+    this.pvName = pvName;  
+    this.onData = onData;  //call when data is received
+    this.onError = onError; //call when error happens
+    this.onConnect = onConnect; //call when connected
+    this.ws = null;	
     this.reconnectAttempts = 0;
     this.reconnectTimer = null;
     this.messageCount = 0; // Track number of messages received
