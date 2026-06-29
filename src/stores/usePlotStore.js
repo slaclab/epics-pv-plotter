@@ -1,6 +1,6 @@
 // src/stores/usePlotStore.js
 import { create } from 'zustand';
-
+//zustand, state management library from react
 export const usePlotStore = create((set) => ({
   plots: [],
   nextPlotId: 1,
@@ -16,8 +16,9 @@ export const usePlotStore = create((set) => ({
         w: 12,                          // Full width (all 12 columns)
         h: 4                            // 4 rows height (taller for better visibility)
       };
-
-      return {
+      //
+      return {  
+	//create a new array, keep existing plots and append the new plot at the end.
         plots: [...state.plots, newPlot],
         nextPlotId: state.nextPlotId + 1
       };
@@ -41,7 +42,7 @@ export const usePlotStore = create((set) => ({
         })
         .filter(Boolean)
     })),
-
+  // allow the users to change the playout
   updateLayout: (newLayout) =>
     set((state) => ({
       plots: state.plots.map((plot) => {

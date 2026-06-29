@@ -6,18 +6,24 @@ import { Plus, Trash2, Activity } from 'lucide-react';
 import './App.css';
 
 function App() {
+  //input box for the user to enter PV Names
   const [pvInput, setPvInput] = useState('');
+  //usePlotStore: Zustand Custom Hook: returns an javascript object : {plots:[], addPlot: fn, removePlot: fn, clearAll: fn
+  //desctructure 3 properties from the returned object
   const { plots, addPlot, clearAll } = usePlotStore();
 
+
+  //
   const handleAddPlot = () => {
-    const trimmedInput = pvInput.trim();
+    const trimmedInput = pvInput.trim(); //remove spaces before and after the string
     
+    //Validate: check if input is empty
     if (!trimmedInput) {
       alert('Please enter a PV name');
       return;
     }
 
-    // Support comma-separated multiple PVs
+    //Support comma-separated multiple PVs
     const pvNames = trimmedInput
       .split(',')
       .map(pv => pv.trim())
@@ -27,11 +33,13 @@ function App() {
       alert('Please enter valid PV name(s)');
       return;
     }
-
+    //add new plot to global stete
     addPlot(pvNames);
+    //clear input field
     setPvInput('');
   };
 
+  //Event Handler
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleAddPlot();
@@ -40,9 +48,10 @@ function App() {
 
   return (
     <div className="app">
+
       <header className="app-header">
         <div className="header-content">
-          <h1>
+          <h1> //header
             <Activity size={32} />
             EPICS Real-time Monitor
           </h1>
@@ -52,7 +61,7 @@ function App() {
 
       <div className="control-panel">
         <div className="input-group">
-          <input
+          <input   //input box to get PV names
             type="text"
             className="pv-input"
             placeholder="Enter PV name (e.g., IOC:ai1 or IOC:ai1,IOC:ai2 for multi-PV plot)"
@@ -60,7 +69,7 @@ function App() {
             onChange={(e) => setPvInput(e.target.value)}
             onKeyPress={handleKeyPress}
           />
-          <button
+          <button  //button to add plot
             className="btn btn-primary"
             onClick={handleAddPlot}
             disabled={!pvInput.trim()}

@@ -5,10 +5,13 @@ import { WS_CONFIG } from '../utils/constants';
 
 export class PVWebSocket {
   constructor(pvName, onData, onError, onConnect) {
-    this.pvName = pvName;  
+    this.pvName = pvName; 
+
+    //callback functions, separation of passing and handling
     this.onData = onData;  //call when data is received
     this.onError = onError; //call when error happens
     this.onConnect = onConnect; //call when connected
+
     this.ws = null;	
     this.reconnectAttempts = 0;
     this.reconnectTimer = null;
@@ -95,6 +98,8 @@ export class PVWebSocket {
   }
 
   disconnect() {
+    this.reconnectAttemps = 0;
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

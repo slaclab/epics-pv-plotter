@@ -4,13 +4,18 @@ import GridLayout from 'react-grid-layout';
 import { usePlotStore } from '../stores/usePlotStore';
 import MultiPVPlot from './MultiPVPlot';
 import { PLOT_CONFIG } from '../utils/constants';
-import 'react-grid-layout/css/styles.css';
+import 'react-grid-layout/css/styles.css'; //make sure it is react-resizable
 import 'react-resizable/css/styles.css';
 import './PlotGrid.css';
 
 export default function PlotGrid() {
   const { plots, updateLayout } = usePlotStore();
-
+  //plots : array with id, pvNames, x, y, w, h (plot location in the grid
+  //updateLayout: layout after updated
+  //
+  //
+  //useMemo caches the computed layout array.
+  //It recomputes only when 'plots' changes
   const layout = useMemo(
     () =>
       plots.map((plot) => ({

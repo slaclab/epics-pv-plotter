@@ -39,7 +39,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement('a'); //archor tag
     link.href = url;
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -110,16 +110,19 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   // Initialize buffers and websockets
   useEffect(() => {
     console.log(`🔧 Initializing plot for PVs:`, pvNames);
-    
+
+    //create independent connections for each PV 
     pvNames.forEach((pvName) => {
       if (!buffersRef.current[pvName]) {
+	//create independent data buffer for each PV
         buffersRef.current[pvName] = new DataBuffer(PLOT_CONFIG.MAX_POINTS);
-        
+        //create a websocket instance and connect
         const ws = new PVWebSocket(
           pvName,
-          (value, timestamp) => {
+          (value, timestamp) => {      //onData/callback execute when new data arrives
             buffersRef.current[pvName].addPoint(value, timestamp);
           },
+	  //Other callbacks
           (error) => {
             console.error(`Error for ${pvName}:`, error);
             setConnectionStatus((prev) => ({ ...prev, [pvName]: 'error' }));
@@ -134,7 +137,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         setConnectionStatus((prev) => ({ ...prev, [pvName]: 'connecting' }));
       }
     });
-
+	
     // Cleanup removed PVs
     Object.keys(buffersRef.current).forEach((pvName) => {
       if (!pvNames.includes(pvName)) {
@@ -250,7 +253,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         <div className="pv-tags">
           {pvNames.map((pvName) => (
             <div key={pvName} className="pv-tag">
-              {getStatusIcon(connectionStatus[pvName])}
+              {getStatusIcon(connectionStatus[pvName])}  //connection status of each PV
               <span className="pv-name">{pvName}</span>
               {buffersRef.current[pvName] && (
                 <span className="pv-count">

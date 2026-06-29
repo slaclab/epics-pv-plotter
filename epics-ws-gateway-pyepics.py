@@ -93,6 +93,8 @@ async def handle_client(websocket):
     log.info(f"Client connected: {client_id}")
     
     # message_queue = asyncio.Queue(maxsize = 10)
+    # asyncio.Queue put method is defined as async, this kind of 
+    # of methods return to a coroutine object when called
     message_queue = asyncio.Queue()
     
     # FIXED: Get event loop reference BEFORE creating callback
@@ -107,7 +109,8 @@ async def handle_client(websocket):
                 'status': status if status is not None else 0,
                 'severity': severity if severity is not None else 0
             }
-            # FIXED: Use the stored loop reference
+            # FIXED: Use the stored loop reference 
+            # asyncio.run_coroutine_threadsafe(coro, loop) --> submit the coroutine coro to loop(the main thread's event)
             asyncio.run_coroutine_threadsafe(
                 message_queue.put(data),
                 loop  # Use the loop we captured earlier
