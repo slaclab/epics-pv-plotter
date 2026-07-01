@@ -90,8 +90,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     });
 
     const csv = [header.join(',')].concat(rows).join('\n');
-   
-    //blob (binary language object) url
+    // Blob (Binary Large Object) URL
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
