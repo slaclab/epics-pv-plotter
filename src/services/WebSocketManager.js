@@ -25,13 +25,14 @@ export class PVWebSocket {
       console.log(`🔗 Connecting to: ${wsUrl}`);
       this.ws = new WebSocket(wsUrl);
 
+      //
       this.ws.onopen = () => {
         console.log(`✅ Connected: ${this.pvName}`);
         this.reconnectAttempts = 0;
         this.messageCount = 0;
         if (this.onConnect) this.onConnect();
       };
-
+      //
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -58,7 +59,7 @@ export class PVWebSocket {
           if (this.onError) this.onError('Data parse error');
         }
       };
-
+      //
       this.ws.onerror = (error) => {
         // Only log error if not initial connection attempt
         if (this.reconnectAttempts > 0) {
@@ -69,6 +70,7 @@ export class PVWebSocket {
         }
       };
 
+      // when connection is closed, reconnect
       this.ws.onclose = () => {
         console.log(`🔌 Connection closed: ${this.pvName} (received ${this.messageCount} messages)`);
         this.attemptReconnect();
