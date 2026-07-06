@@ -95,11 +95,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     });
     
     const csv = [header.join(',')].concat(rows).join('\n');
-<<<<<<< HEAD
-    // Blob (Binary Large Object) URL
-=======
-   
->>>>>>> 00f082d (added the code sync all the plots)
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
