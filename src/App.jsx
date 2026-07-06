@@ -22,7 +22,7 @@ function App() {
     if (plots.length > 0) {
       console.log(`✅ Restored ${plots.length} plot(s) from previous session`);
     }
-  }, []);
+  }, [plots.length]);
 
   const handleAddPlot = () => {
     const trimmedInput = pvInput.trim();
