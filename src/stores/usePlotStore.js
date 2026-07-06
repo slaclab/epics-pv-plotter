@@ -15,10 +15,10 @@ export const usePlotStore = create(
       
       // Toggle time synchronization
       toggleTimeSync: () => {
-        set((state) => ({ 
-          timeSyncEnabled: !state.timeSyncEnabled 
+        set((state) => ({
+          timeSyncEnabled: !state.timeSyncEnabled
         }));
-        console.log(`🕐 Time sync: ${!get().timeSyncEnabled ? 'ON' : 'OFF'}`);
+        console.log(`🕐 Time sync: ${get().timeSyncEnabled ? 'ON' : 'OFF'}`);
       },
       
       // Set global time window
