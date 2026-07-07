@@ -25,7 +25,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     globalTimeWindow
   } = usePlotStore();
 
-  // Export data functions (unchanged)
+  // Export data function for a single PV
   const exportData = (pvName) => {
     const buffer = buffersRef.current[pvName];
     
@@ -38,7 +38,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     
     const csv = ['Timestamp,Value']
       .concat(data.x.map((time, i) => 
-        `$${time.toISOString()},$${data.y[i]}`
+        `${time.toISOString()},${data.y[i]}`
       ))
       .join('\n');
     
@@ -48,16 +48,17 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     link.href = url;
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    link.download = `$${pvName}_$${timestamp}.csv`;
+    link.download = `${pvName}_${timestamp}.csv`;
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    console.log(`✅ Exported $${data.x.length} data points for $${pvName}`);
+    console.log(`✅ Exported ${data.x.length} data points for ${pvName}`);
   };
 
+  // Export all data for multi-PV plots
   const exportAllData = () => {
     if (pvNames.length === 1) {
       exportData(pvNames[0]);
@@ -95,7 +96,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     });
     
     const csv = [header.join(',')].concat(rows).join('\n');
-
+   
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -140,6 +141,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       }
     });
     
+    // Cleanup removed PVs
     Object.keys(buffersRef.current).forEach((pvName) => {
       if (!pvNames.includes(pvName)) {
         websocketsRef.current[pvName]?.disconnect();
@@ -155,3 +157,214 @@ export default function MultiPVPlot({ plotId, pvNames }) {
 
     // Periodic plot update
     let updateCount = 0;
+    updateTimerRef.current = setInterval(() => {
+      updateCount++;
+      
+      // Calculate X-axis range FIRST (before filtering data)
+      let xMin = null;
+      let xMax = null;
+      
+
+      //X axis (time) range when time Sync Enabled 
+      if (timeSyncEnabled) {
+        // Rolling time window - always end at NOW
+        const now = new Date();
+        xMax = now;
+        xMin = new Date(now.getTime() - globalTimeWindow * 1000);
+      }
+
+      //Time Sync Enabled Off, the xMin and xMax are null
+
+
+
+      const traces = pvNames.map((pvName) => {
+        const buffer = buffersRef.current[pvName];
+        let data = buffer ? buffer.getData() : { x: [], y: [] };
+        
+        // If time sync is enabled, filter data to only show points within the time window
+        if (timeSyncEnabled && xMin && xMax && data.x.length > 0) {
+          const filteredIndices = [];
+          data.x.forEach((time, idx) => {
+            if (time >= xMin && time <= xMax) {
+              filteredIndices.push(idx);
+            }
+          });
+          
+          data = {
+            x: filteredIndices.map(i => data.x[i]),
+            y: filteredIndices.map(i => data.y[i])
+          };
+        }
+        
+        return {
+          x: data.x,
+          y: data.y,
+          type: 'scatter',
+          mode: 'lines+markers',
+          name: pvName,
+          line: { width: 2 },
+          marker: { size: 4 }
+        };
+      });
+
+      // Calculate Y-axis range from visible data
+      let allValues = [];
+      traces.forEach((trace) => {
+        allValues = allValues.concat(trace.y);
+      });
+
+      if (allValues.length > 0) {
+        const min = Math.min(...allValues);
+        const max = Math.max(...allValues);
+        const range = max - min;
+        const padding = range * 0.1 || 0.0001;
+        
+        setYAxisRange([min - padding, max + padding]);
+      }
+
+      // Set X-axis range
+      if (timeSyncEnabled && xMin && xMax) {
+        setXAxisRange([xMin, xMax]);
+      } else {
+        // Auto range - show all data
+        setXAxisRange(null);
+      }
+
+      // Log update info every 10 updates
+      if (updateCount % 10 === 0) {
+        const totalPoints = pvNames.reduce((sum, pvName) => {
+          const buffer = buffersRef.current[pvName];
+          return sum + (buffer ? buffer.getPointCount() : 0);
+        }, 0);
+        console.log(`🔄 Plot update #${updateCount}: ${totalPoints} total points across ${pvNames.length} PV(s)`);
+        
+        if (timeSyncEnabled) {
+          console.log(`🕐 Time window: ${xMin?.toLocaleTimeString()} - ${xMax?.toLocaleTimeString()}`);
+        }
+      }
+
+      setPlotData(traces);
+      setRevision(prev => prev + 1); // Force plot re-render
+      
+    }, PLOT_CONFIG.UPDATE_INTERVAL);
+
+    console.log(`✅ Plot update timer started (interval: ${PLOT_CONFIG.UPDATE_INTERVAL}ms)`);
+
+    return () => {
+      console.log(`🛑 Cleaning up plot for:`, pvNames);
+      if (updateTimerRef.current) {
+        clearInterval(updateTimerRef.current);
+        console.log(`✅ Plot update timer stopped`);
+      }
+      Object.values(websocketsRef.current).forEach((ws) => ws.disconnect());
+    };
+  }, [pvNames, timeSyncEnabled, globalTimeWindow]);
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'connected':
+        return <Wifi size={14} className="status-icon connected" />;
+      case 'error':
+        return <AlertCircle size={14} className="status-icon error" />;
+      default:
+        return <WifiOff size={14} className="status-icon connecting" />;
+    }
+  };
+
+  const plotLayout = {
+    ...PLOT_LAYOUT_TEMPLATE,
+    title: pvNames.length === 1 ? pvNames[0] : 'Multi-PV Plot',
+    datarevision: revision,
+    yaxis: {
+      ...PLOT_LAYOUT_TEMPLATE.yaxis,
+      autorange: yAxisRange ? false : true,
+      range: yAxisRange,
+      exponentformat: 'e',
+      tickformat: '.2e'
+    },
+    xaxis: {
+      ...PLOT_LAYOUT_TEMPLATE.xaxis,
+      type: 'date',
+      tickformat: '%H:%M:%S',
+      autorange: xAxisRange ? false : true,
+      range: xAxisRange
+    },
+    margin: { l: 70, r: 30, t: 40, b: 50 }
+  };
+
+  return (
+    <div className="plot-widget">
+      <div className="plot-header">
+	   
+        <div className="pv-tags">
+	  {/*
+          {pvNames.map((pvName) => (
+            <div key={pvName} className="pv-tag">
+		   
+              {getStatusIcon(connectionStatus[pvName])}
+	      
+              <span className="pv-name">{pvName}</span>
+	      
+              {buffersRef.current[pvName] && (
+                <span className="pv-count">
+                  ({buffersRef.current[pvName].getPointCount()})
+                </span>
+              )}
+	      
+              {pvNames.length > 1 && (
+                <button
+                  className="pv-remove"
+                  onClick={() => removePVFromPlot(plotId, pvName)}
+                  title="Remove this PV"
+                >
+                  <X size={12} />
+                </button>
+              )}
+	      
+            </div>
+          ))}
+	  */}
+        </div>
+
+        <div className="plot-actions">
+          <button
+            className="plot-action-btn"
+            onClick={exportAllData}
+            title="Export data to CSV"
+          >
+            <Download size={16} />  
+          </button>
+
+          <button
+            className="plot-close"
+            onClick={() => removePlot(plotId)}
+            title="Close plot"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div className="plot-container">
+        <Plot
+          data={plotData}
+          layout={plotLayout}
+          config={{
+            responsive: true,
+            displayModeBar: false,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+            toImageButtonOptions: {
+              format: 'png',
+              filename: pvNames.join('_'),
+              height: 600,
+              width: 1000
+            }
+          }}
+          style={{ width: '100%', height: '100%' }}
+          useResizeHandler={true}
+        />
+      </div>
+    </div>
+  );
+}
