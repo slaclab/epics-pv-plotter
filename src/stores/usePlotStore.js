@@ -1,6 +1,7 @@
 // src/stores/usePlotStore.js
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { PLOT_CONFIG } from '../utils/constants';
 
 let nextPlotId = 1;
 
@@ -27,21 +28,34 @@ export const usePlotStore = create(
         console.log(`🕐 Time window set to: ${seconds}s`);
       },
 
+      // add plot layout
+      
       addPlot: (pvNames) => {
         const plots = get().plots;
+        
+        // calculate number of Plots per row
+        const plotsPerRow = Math.floor(PLOT_CONFIG.GRID_COLS / PLOT_CONFIG.DEFAULT_WIDTH);
+        // 12 / 4 = 3 ( 3 plots)
+        
+        const plotIndex = plots.length;
+        
         const newPlot = {
           id: nextPlotId++,
           pvNames: Array.isArray(pvNames) ? pvNames : [pvNames],
-          x: (plots.length * 3) % 12,
-          y: Math.floor((plots.length * 3) / 12) * 3,
-          w: 6,
-          h: 3
+          
+          // ✅ get the precise position of each plot
+          x: (plotIndex % plotsPerRow) * PLOT_CONFIG.DEFAULT_WIDTH,
+          y: Math.floor(plotIndex / plotsPerRow) * PLOT_CONFIG.DEFAULT_HEIGHT,
+          
+          w: PLOT_CONFIG.DEFAULT_WIDTH,   // 4
+          h: PLOT_CONFIG.DEFAULT_HEIGHT   // 3
         };
         
         set({ plots: [...plots, newPlot] });
-        console.log(`✅ Plot added:`, newPlot);
+        console.log(`✅ Plot added at (${newPlot.x}, ${newPlot.y}):`, newPlot);
       },
 
+      // Remove Plot 
       removePlot: (plotId) => {
         set((state) => ({
           plots: state.plots.filter((plot) => plot.id !== plotId)

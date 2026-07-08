@@ -20,12 +20,12 @@ export const WS_CONFIG = {
 // ================================================================
 export const PLOT_CONFIG = {
   // Data buffer settings
-  MAX_POINTS: 1000,               // Maximum number of data points stored per PV
+  MAX_POINTS: 6000,               // Maximum number of data points stored per PV
   UPDATE_INTERVAL: 100,           // Plot update interval (milliseconds)
   
   // Grid layout settings
   GRID_COLS: 12,                  // Number of columns in the grid layout
-  ROW_HEIGHT: 100,                // Height of each row (pixels)
+  ROW_HEIGHT: 120,                // Height of each row (pixels)
   
   // Default plot dimensions (in grid units)
   DEFAULT_WIDTH: 4,               // Default width of a plot widget

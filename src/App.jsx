@@ -2,11 +2,12 @@
 import { useState, useEffect } from 'react';
 import { usePlotStore } from './stores/usePlotStore';
 import PlotGrid from './components/PlotGrid';
-import { Plus, Trash2, Activity, Clock } from 'lucide-react';
+import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import './App.css';
 
 function App() {
   const [pvInput, setPvInput] = useState('');
+  const [showInfo, setShowInfo] = useState(false);
   
   const { 
     plots, 
@@ -64,7 +65,7 @@ function App() {
 
   return (
     <div className="app">
-
+      {/*
       <header className="app-header">
         <div className="header-content">
           <h1> 
@@ -74,7 +75,7 @@ function App() {
           <p>Real-time Process Variable monitoring and visualization</p>
         </div>
       </header>
-
+      */}
       <div className="control-panel">
         <div className="input-group">
           <input
@@ -101,10 +102,20 @@ function App() {
             <Trash2 size={18} />
             Clear All
           </button>
-        </div>
+          
+          <button
+            className="btn btn-info"
+            onClick={() => setShowInfo(!showInfo)}
+            title="Toggle info panel"
+          >
+            {showInfo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            Info Details
+          </button>
 
-        {/* Time Synchronization Controls */}
-        <div className="time-sync-controls">
+          {/* Vertical Separator */}
+          <div className="separator"></div>
+
+          {/* Time Synchronization Controls - Now Inline */}
           <button
             className={`btn ${timeSyncEnabled ? 'btn-success' : 'btn-secondary'}`}
             onClick={toggleTimeSync}
@@ -115,8 +126,8 @@ function App() {
           </button>
           
           {timeSyncEnabled && (
-            <div className="time-window-selector">
-              <label>Time Window:</label>
+            <>
+              <label className="time-window-label">Time Window:</label>
               <select 
                 value={globalTimeWindow} 
                 onChange={(e) => setTimeWindow(Number(e.target.value))}
@@ -130,22 +141,25 @@ function App() {
                 <option value={1800}>30 minutes</option>
                 <option value={3600}>1 hour</option>
               </select>
-            </div>
+            </>
           )}
         </div>
 
-        <div className="info-panel">
-          <div className="info-item">
-            <div className="info-label">Active Plots</div>
-            <div className="info-value">{plots.length}</div>
-          </div>
-          <div className="info-item">
-            <div className="info-label">Monitored PVs</div>
-            <div className="info-value">
-              {plots.reduce((sum, plot) => sum + plot.pvNames.length, 0)}
+        {/* Collapsible Info Panel */}
+        {showInfo && (
+          <div className="info-panel">
+            <div className="info-item">
+              <div className="info-label">Active Plots</div>
+              <div className="info-value">{plots.length}</div>
+            </div>
+            <div className="info-item">
+              <div className="info-label">Monitored PVs</div>
+              <div className="info-value">
+                {plots.reduce((sum, plot) => sum + plot.pvNames.length, 0)}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <PlotGrid />

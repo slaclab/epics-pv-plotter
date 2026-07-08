@@ -1,0 +1,183 @@
+graph TB
+    %% ================================================================
+    %% LAYER 1: Hardware
+    %% ================================================================
+    subgraph L1["Layer 1: Physical Hardware"]
+        Hardware[Physical Hardware<br/>Motors, Sensors, Cameras]
+        Drivers[Device Drivers<br/>Serial, TCP/IP, USB, Modbus]
+        
+        Hardware --> Drivers
+    end
+
+    %% ================================================================
+    %% LAYER 2: EPICS IOC
+    %% ================================================================
+    subgraph L2["Layer 2: EPICS IOC"]
+        ASYN[ASYN Framework<br/>Hardware Abstraction Layer]
+        DeviceSupport[Device Support]
+        Records[EPICS Records]
+        PVDB[(PV Database)]
+        CAServer[Channel Access Server<br/>Port 5064/5065]
+        
+        ASYN --> DeviceSupport --> Records --> PVDB --> CAServer
+    end
+
+    %% ================================================================
+    %% LAYER 3: Gateway
+    %% ================================================================
+    subgraph L3["Layer 3: WebSocket Gateway"]
+        direction TB
+        
+        subgraph L3A["EPICS Client Library"]
+            direction TB
+            Caproto["✅ Caproto - Our Choice<br/>────────────────<br/>Pure Python | Async native<br/>Easy WebSocket integration<br/>No C dependencies"]
+            PyEpics["⚪ pyepics - Alternative<br/>────────────────<br/>C wrapper | High performance<br/>Callback-based threading<br/>Needs sync adapter for async"]
+            P4P["❌ p4p - Future Option<br/>────────────────<br/>For EPICS 7 only<br/>PVAccess protocol<br/>Not compatible with EPICS 3"]
+        end
+        
+        subgraph L3B["FastAPI Server - Port 8000"]
+            FastAPI["FastAPI Framework<br/>════════════════<br/>Provides BOTH interfaces:<br/>• WebSocket /ws - Real-time streaming<br/>• HTTP /health, /docs, /api - Operations"]
+        end
+        
+        subgraph L3C["Dual API Architecture"]
+            direction TB
+            
+            WS["🔴 PRIMARY: WebSocket API<br/>══════════════════════════<br/>Endpoint: /ws?pv=NAME<br/>Protocol: ws:// bidirectional<br/>Connection: Persistent<br/>Purpose: Real-time PV monitoring<br/>──────────────────────────<br/>Features:<br/>• Continuous data streaming<br/>• Server push capability<br/>• Low latency ~ms<br/>• Handles PV subscriptions"]
+            
+            HTTP["🟢 AUXILIARY: HTTP REST API<br/>══════════════════════════<br/>Endpoints:<br/>• GET / - Welcome page<br/>• GET /health - Health check<br/>• GET /api/subscriptions - Debug<br/>• GET /docs - Swagger UI<br/>• GET /redoc - ReDoc<br/>──────────────────────────<br/>Protocol: http:// request-response<br/>Connection: Short-lived<br/>Purpose: Operations & monitoring"]
+            
+            Reasons["📋 Why Both Interfaces?<br/>══════════════════════════<br/>1. User Experience:<br/>   • HTTP /docs provides usage instructions<br/>   • Browser-accessible documentation<br/>──────────────────────────<br/>2. Production Monitoring:<br/>   • HTTP /health for K8s probes<br/>   • Standard DevOps tool support<br/>──────────────────────────<br/>3. Debugging & Operations:<br/>   • HTTP /api/subscriptions for real-time info<br/>   • curl-friendly query endpoints<br/>──────────────────────────<br/>4. Auto-documentation:<br/>   • Swagger UI & ReDoc auto-generated<br/>   • Interactive API testing<br/>──────────────────────────<br/>5. Tool Compatibility:<br/>   • Works with all monitoring systems<br/>   • Prometheus, Grafana, Nagios support<br/>──────────────────────────<br/>6. Security & Access Control:<br/>   • Standard OAuth2/JWT for HTTP<br/>   • Mature middleware ecosystem"]
+        end
+        
+        Caproto ==> FastAPI
+        PyEpics -.-> FastAPI
+        P4P -.-> FastAPI
+        FastAPI --> WS
+        FastAPI --> HTTP
+        WS -.-> Reasons
+        HTTP -.-> Reasons
+    end
+
+    %% ================================================================
+    %% LAYER 4: React Frontend - SIMPLIFIED VERSION
+    %% ================================================================
+    subgraph L4["Layer 4: React Frontend Application"]
+        direction TB
+        
+        subgraph L4A["Service Layer - src/services/"]
+            direction TB
+            
+            WSManager["WebSocketManager.js<br/>═══════════════════════<br/>Manages WebSocket connections<br/>to FastAPI gateway<br/>───────────────────────<br/>Class: PVWebSocket<br/>Methods: connect(), disconnect()"]
+            
+            DataBuf["DataBuffer.js<br/>═══════════════════════<br/>Time-series data buffer<br/>with sliding window<br/>───────────────────────<br/>Class: DataBuffer<br/>Max: 1000 points (FIFO)"]
+        end
+        
+        subgraph L4B["Component Layer - src/components/"]
+            direction TB
+            
+            MultiPV["MultiPVPlot.jsx<br/>═══════════════════════<br/>Main plot component<br/>Manages multiple PV plots<br/>with real-time updates<br/>───────────────────────<br/>Props: plotId, pvNames[]<br/>Features: Multi-PV, CSV export"]
+            
+            Plotly["Plotly.js Integration<br/>═══════════════════════<br/>Interactive chart rendering<br/>───────────────────────<br/>Features:<br/>Zoom, pan, hover tooltips"]
+        end
+        
+        subgraph L4C["Data Flow Architecture"]
+            direction TB
+            
+            Flow["📊 Complete Data Pipeline<br/>═══════════════════════<br/>WS → Parse → Buffer → Timer → Plot<br/>───────────────────────<br/>Update interval: 500ms<br/>Latency: ~10-50ms"]
+        end
+        
+        subgraph L4D["Store Management - Zustand"]
+            direction LR
+            
+            PlotStore["usePlotStore.js<br/>═══════════════════════<br/>Global state manager<br/>───────────────────────<br/>Actions: addPlot(),<br/>removePlot(), removePVFromPlot()"]
+        end
+        
+        WSManager --> MultiPV
+        DataBuf --> MultiPV
+        MultiPV --> Plotly
+        MultiPV --> PlotStore
+        MultiPV -.-> Flow
+    end
+
+    %% ================================================================
+    %% Connections
+    %% ================================================================
+    Drivers ==> ASYN
+    CAServer ==>|Channel Access<br/>Binary Protocol| Caproto
+    CAServer -.->|Channel Access<br/>Binary Protocol| PyEpics
+    
+    WS ==>|ws://gateway:8000/ws?pv=NAME<br/>Full-duplex persistent connection<br/>Real-time streaming| WSManager
+    HTTP -.->|health checks only| MultiPV
+
+    %% ================================================================
+    %% Detailed Annotations (Moved outside boxes)
+    %% ================================================================
+    
+    noteWSDetail[/"📘 WebSocketManager.js Details<br/>═══════════════════════════════════<br/>Class: PVWebSocket<br/>───────────────────────────────────<br/>Constructor Parameters:<br/>• pvName: string<br/>• onData: (value, timestamp) ⇒ void (add points)<br/>• onError: (error) ⇒ void (log error message and update status)<br/>• onConnect: () ⇒ void (update status)<br/>───────────────────────────────────<br/>Key Methods:<br/>• connect() - Establish WS to gateway<br/>• disconnect() - Cleanup connection<br/>• getStatus() - Get connection state<br/>───────────────────────────────────<br/>Internal Handlers:<br/>• onmessage - Parse JSON {value, timestamp}<br/>• onerror - Trigger onError callback<br/>• onopen - Trigger onConnect callback<br/>• onclose - Auto-reconnect logic<br/>───────────────────────────────────<br/>Auto-Reconnect:<br/>• Max attempts: 5<br/>• Delay: 3s (exponential backoff)<br/>───────────────────────────────────<br/>URL Format:<br/>ws://gateway:8000/ws?pv=PVNAME"/]
+    
+    noteBufDetail[/"📘 DataBuffer.js Details<br/>═══════════════════════════════════<br/>Class: DataBuffer<br/>───────────────────────────────────<br/>Constructor:<br/>• maxPoints: 1000 (configurable)<br/>───────────────────────────────────<br/>Internal Storage:<br/>• timestamps: Date[] - JS Date objects<br/>• values: number[] - Numeric PV values<br/>───────────────────────────────────<br/>Key Methods:<br/>• addPoint(value, timestamp)<br/>  - Convert UNIX timestamp to Date<br/>  - Push to arrays<br/>  - Maintain sliding window (FIFO)<br/>• getData() - Return {x: Date[], y: number[]}<br/>• getPointCount() - Return current length<br/>• clear() - Reset buffers<br/>───────────────────────────────────<br/>Data Management:<br/>• Auto-cleanup when maxPoints exceeded<br/>• Timestamp validation<br/>• Type conversion handling<br/>• O(1) append, O(1) shift operations"/]
+ 
+    noteMultiPVDetail[/"📘 MultiPVPlot.jsx Details<br/>═══════════════════════════════════<br/>Functional Component: MultiPVPlot<br/>───────────────────────────────────<br/>Props: {plotId, pvNames: string[]}<br/>───────────────────────────────────<br/>🔷 State: plotData, connectionStatus, yAxisRange, revision<br/>🔷 Refs: buffersRef, websocketsRef, updateTimerRef<br/>───────────────────────────────────<br/>🎯 CORE FUNCTION 1: Real-time Monitoring via useEffect<br/>───────────────────────────────────<br/>useEffect(() ⇒ {<br/>  Phase 1: For each PV<br/>    • Create DataBuffer + PVWebSocket<br/>    • ws.connect() to backend<br/>    • Save refs & set status<br/>  ───────────────────────────────────<br/>  Phase 2: Cleanup removed PVs<br/>    • Disconnect & delete old PVs<br/>  ───────────────────────────────────<br/>  Phase 3: Start timer (100ms PLOT_CONFIGS.UPDATE_INTERVAL)<br/>    • Build Plotly traces from buffers<br/>    • Calculate Y-axis range<br/>    • Update state → trigger re-render<br/>  ───────────────────────────────────<br/>  Phase 4: Cleanup on unmount<br/>    • Stop timer & disconnect all<br/>}, [pvNames])<br/>───────────────────────────────────<br/>🔄 Data Flow:<br/>WS message → onData(v,t) →<br/>buffer.addPoint(v,t) → Timer reads →<br/>setPlotData() → Plotly re-renders<br/>───────────────────────────────────<br/>🎯 CORE FUNCTION 2: Data Export<br/>───────────────────────────────────<br/>exportData(pvName):<br/>  buffer.getData() → CSV format →<br/>  Blob → URL → Download link<br/>───────────────────────────────────<br/>exportAllData():<br/>  Collect timestamps → Build CSV →<br/>  Combined multi-PV export<br/>───────────────────────────────────<br/>🎨 UI: Status icons, Export/Close buttons"/]
+
+    notePlotlyDetail[/"📘 Plotly.js Integration Details<br/>═══════════════════════════════════<br/>Component: Plot from 'react-plotly.js'<br/>───────────────────────────────────<br/>🔷 Data Format:<br/>traces = [{<br/>  x: [Date, Date, ...],<br/>  y: [number, number, ...],<br/>  type: 'scatter',<br/>  mode: 'lines+markers',<br/>  name: pvName,<br/>  line: { width: 2 },<br/>  marker: { size: 4 }<br/>}, ...]<br/>───────────────────────────────────<br/>🔷 Layout Configuration:<br/>• title: PV name or 'Multi-PV Plot'<br/>• datarevision: revision (force update)<br/>• yaxis:<br/>  - autorange: false when range set<br/>  - range: [min-padding, max+padding]<br/>  - exponentformat: 'e'<br/>  - tickformat: '.2e'<br/>• xaxis:<br/>  - type: 'date'<br/>  - tickformat: '%H:%M:%S'<br/>───────────────────────────────────<br/>🔷 Interactive Features:<br/>• Zoom, pan, reset axes<br/>• Export to PNG<br/>• Hover tooltips<br/>• Legend toggle<br/>───────────────────────────────────<br/>🔷 Update Mechanism:<br/>• Triggered by plotData state change<br/>• Uses datarevision to force refresh<br/>• Responsive to container resize"/]
+    
+    noteFlowDetail[/"📊 Data Pipeline Details<br/>═══════════════════════════════════<br/>Stage 1: WebSocket Reception<br/>├─ FastAPI sends: {value, timestamp}<br/>├─ WSManager receives message<br/>└─ JSON.parse() → JS object<br/>───────────────────────────────────<br/>Stage 2: Data Validation<br/>├─ Extract value (number)<br/>├─ Extract timestamp (UNIX seconds)<br/>└─ Trigger onData callback<br/>───────────────────────────────────<br/>Stage 3: Buffer Storage<br/>├─ callback(value, timestamp) executed<br/>├─ buffer.addPoint() called<br/>├─ Convert timestamp × 1000 → ms<br/>├─ Create new Date(timestamp_ms)<br/>└─ Push to arrays (FIFO if > 1000)<br/>───────────────────────────────────<br/>Stage 4: Periodic Update (500ms)<br/>├─ Timer triggers update function<br/>├─ For each PV: buffer.getData()<br/>├─ Build Plotly traces<br/>├─ Calculate Y-axis range<br/>└─ setPlotData() → React re-render<br/>───────────────────────────────────<br/>Stage 5: Visualization<br/>├─ Plotly.js receives new data<br/>├─ Check datarevision<br/>├─ Redraw chart<br/>└─ Update axes, legend, tooltips<br/>───────────────────────────────────<br/>⚡ Performance Metrics:<br/>• WebSocket latency: ~10-50ms<br/>• Buffer operation: <1ms<br/>• Plot update: ~20-100ms<br/>• Total end-to-end: ~500ms<br/>───────────────────────────────────<br/>🔄 Concurrency Model:<br/>• Independent WebSocket per PV<br/>• Callbacks execute asynchronously<br/>• Buffer writes are synchronous<br/>• Single timer coordinates updates<br/>• React batches state updates"/]
+    
+    noteWSDetail -.-> WSManager
+    noteBufDetail -.-> DataBuf
+    noteMultiPVDetail -.-> MultiPV
+    notePlotlyDetail -.-> Plotly
+    noteFlowDetail -.-> Flow
+
+    %% ================================================================
+    %% Original Annotations (continued)
+    %% ================================================================
+    note1[/"📝 Architecture Pattern:<br/>One PVWebSocket + One DataBuffer per PV<br/>All managed by refs (persist across renders)<br/>Independent connections avoid interference"/]
+    note1 -.-> L4A
+    
+    note2[/"💡 Callback Chain:<br/>WS.onmessage → onData(v,t) →<br/>buffer.addPoint(v,t) →<br/>Timer reads buffer →<br/>Component updates state →<br/>Plotly re-renders"/]
+    note2 -.-> Flow
+    
+    note3[/"⚡ Performance Optimization:<br/>• Buffer: Fixed 1000 points (O(1) access)<br/>• Update: 500ms interval (not real-time per point)<br/>• Refs: Avoid re-creation on re-render<br/>• Batch: Single setPlotData() for all PVs"/]
+    note3 -.-> DataBuf
+    
+    note4[/"🔧 Cleanup Strategy:<br/>• useEffect return function<br/>• clearInterval(updateTimerRef)<br/>• ws.disconnect() for all connections<br/>• Prevents memory leaks"/]
+    note4 -.-> MultiPV
+    
+    note5[/"📊 Y-Axis Auto-scaling:<br/>1. Collect all values from all buffers<br/>2. Find min/max across all PVs<br/>3. Add 10% padding<br/>4. Update yAxisRange state<br/>5. Plotly applies to layout"/]
+    note5 -.-> Plotly
+
+    %% ================================================================
+    %% Styling
+    %% ================================================================
+    classDef hw fill:#78350f,stroke:#333,stroke-width:2px,color:#fff
+    classDef ioc fill:#10b981,stroke:#333,stroke-width:2px,color:#fff
+    classDef selected fill:#f59e0b,stroke:#333,stroke-width:3px,color:#fff
+    classDef alternative fill:#94a3b8,stroke:#64748b,stroke-width:2px,color:#1e293b
+    classDef unavailable fill:#ef4444,stroke:#991b1b,stroke-width:2px,color:#fff,stroke-dasharray:5 5
+    classDef framework fill:#ec4899,stroke:#333,stroke-width:3px,color:#fff
+    classDef primary fill:#8b5cf6,stroke:#333,stroke-width:3px,color:#fff
+    classDef auxiliary fill:#4ade80,stroke:#333,stroke-width:2px,color:#1e293b
+    classDef service fill:#3b82f6,stroke:#333,stroke-width:2px,color:#fff
+    classDef component fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    classDef dataflow fill:#06b6d4,stroke:#333,stroke-width:2px,color:#fff
+    classDef store fill:#f59e0b,stroke:#333,stroke-width:2px,color:#fff
+    classDef note fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#78350f,stroke-dasharray:3 3
+    classDef reasons fill:#ddd6fe,stroke:#7c3aed,stroke-width:2px,color:#1e293b
+    classDef detail fill:#e0f2fe,stroke:#0369a1,stroke-width:2px,color:#0c4a6e,stroke-dasharray:3 3
+    
+    class Hardware,Drivers hw
+    class ASYN,DeviceSupport,Records,PVDB,CAServer ioc
+    class Caproto selected
+    class PyEpics alternative
+    class P4P unavailable
+    class FastAPI framework
+    class WS primary
+    class HTTP auxiliary
+    class WSManager,DataBuf service
+    class MultiPV,Plotly component
+    class Flow dataflow
+    class PlotStore store
+    class note1,note2,note3,note4,note5 note
+    class Reasons reasons
+    class noteWSDetail,noteBufDetail,noteMultiPVDetail,notePlotlyDetail,noteFlowDetail detail
