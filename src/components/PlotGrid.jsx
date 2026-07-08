@@ -1,12 +1,16 @@
 // src/components/PlotGrid.jsx
 import { useMemo } from 'react';
 import GridLayout from 'react-grid-layout';
+import { Responsive, WidthProvider } from "react-grid-layout";
+
 import { usePlotStore } from '../stores/usePlotStore';
 import MultiPVPlot from './MultiPVPlot';
 import { PLOT_CONFIG } from '../utils/constants';
 import 'react-grid-layout/css/styles.css'; //make sure it is react-resizable
 import 'react-resizable/css/styles.css';
 import './PlotGrid.css';
+
+const ResponsiveGridLayout = WidthProvider(GridLayout);
 
 export default function PlotGrid() {
   const { plots, updateLayout } = usePlotStore();
@@ -53,12 +57,11 @@ export default function PlotGrid() {
 
   return (
     <div className="plot-grid-container">
-      <GridLayout
+      <ResponsiveGridLayout
         className="plot-grid"
         layout={layout}
         cols={PLOT_CONFIG.GRID_COLS}
         rowHeight={PLOT_CONFIG.ROW_HEIGHT}
-        width={1200}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".plot-header"
         compactType={null}
@@ -69,7 +72,7 @@ export default function PlotGrid() {
             <MultiPVPlot plotId={plot.id} pvNames={plot.pvNames} />
           </div>
         ))}
-      </GridLayout>
+      </ResponsiveGridLayout>
     </div>
   );
 }

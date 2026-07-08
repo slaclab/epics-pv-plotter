@@ -1,37 +1,29 @@
 // src/App.jsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePlotStore } from './stores/usePlotStore';
 import PlotGrid from './components/PlotGrid';
-import { Plus, Trash2, Activity, Clock } from 'lucide-react';
+import { Plus, Trash2, Activity } from 'lucide-react';
 import './App.css';
 
 function App() {
+  //input box for the user to enter PV Names
   const [pvInput, setPvInput] = useState('');
-  
-  const { 
-    plots, 
-    addPlot, 
-    clearAll,
-    timeSyncEnabled,
-    globalTimeWindow,
-    toggleTimeSync,
-    setTimeWindow
-  } = usePlotStore();
+  //usePlotStore: Zustand Custom Hook: returns an javascript object : {plots:[], addPlot: fn, removePlot: fn, clearAll: fn
+  //desctructure 3 properties from the returned object
+  const { plots, addPlot, clearAll } = usePlotStore();
 
-  useEffect(() => {
-    if (plots.length > 0) {
-      console.log(`✅ Restored ${plots.length} plot(s) from previous session`);
-    }
-  }, [plots.length]);
 
+  //
   const handleAddPlot = () => {
-    const trimmedInput = pvInput.trim();
+    const trimmedInput = pvInput.trim(); //remove spaces before and after the string
     
+    //Validate: check if input is empty
     if (!trimmedInput) {
       alert('Please enter a PV name');
       return;
     }
 
+    //Support comma-separated multiple PVs
     const pvNames = trimmedInput
       .split(',')
       .map(pv => pv.trim())
@@ -41,24 +33,16 @@ function App() {
       alert('Please enter valid PV name(s)');
       return;
     }
-    
+    //add new plot to global stete
     addPlot(pvNames);
+    //clear input field
     setPvInput('');
   };
 
+  //Event Handler
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleAddPlot();
-    }
-  };
-
-  const handleClearAll = () => {
-    if (plots.length === 0) return;
-    
-    if (window.confirm('Are you sure you want to clear all plots?')) {
-      clearAll();
-      localStorage.removeItem('epics-plot-storage');
-      console.log('🗑️ All plots and storage cleared');
     }
   };
 
@@ -77,7 +61,7 @@ function App() {
 
       <div className="control-panel">
         <div className="input-group">
-          <input
+          <input   //input box to get PV names
             type="text"
             className="pv-input"
             placeholder="Enter PV name (e.g., IOC:ai1 or IOC:ai1,IOC:ai2 for multi-PV plot)"
@@ -85,7 +69,7 @@ function App() {
             onChange={(e) => setPvInput(e.target.value)}
             onKeyPress={handleKeyPress}
           />
-          <button
+          <button  //button to add plot
             className="btn btn-primary"
             onClick={handleAddPlot}
             disabled={!pvInput.trim()}
@@ -95,43 +79,12 @@ function App() {
           </button>
           <button
             className="btn btn-danger"
-            onClick={handleClearAll}
+            onClick={clearAll}
             disabled={plots.length === 0}
           >
             <Trash2 size={18} />
             Clear All
           </button>
-        </div>
-
-        {/* Time Synchronization Controls */}
-        <div className="time-sync-controls">
-          <button
-            className={`btn ${timeSyncEnabled ? 'btn-success' : 'btn-secondary'}`}
-            onClick={toggleTimeSync}
-            title="Toggle time axis synchronization"
-          >
-            <Clock size={18} />
-            {timeSyncEnabled ? 'Time Sync: ON' : 'Time Sync: OFF'}
-          </button>
-          
-          {timeSyncEnabled && (
-            <div className="time-window-selector">
-              <label>Time Window:</label>
-              <select 
-                value={globalTimeWindow} 
-                onChange={(e) => setTimeWindow(Number(e.target.value))}
-                className="time-window-select"
-              >
-                <option value={30}>30 seconds</option>
-                <option value={60}>1 minute</option>
-                <option value={120}>2 minutes</option>
-                <option value={300}>5 minutes</option>
-                <option value={600}>10 minutes</option>
-                <option value={1800}>30 minutes</option>
-                <option value={3600}>1 hour</option>
-              </select>
-            </div>
-          )}
         </div>
 
         <div className="info-panel">

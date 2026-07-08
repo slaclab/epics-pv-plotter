@@ -1,31 +1,26 @@
 // src/components/MultiPVPlot.jsx
 import { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
-import { X, Wifi, WifiOff, AlertCircle, Download } from 'lucide-react';
+import { X, Wifi, WifiOff, AlertCircle, Download } from 'lucide-react';  //lucide-react: feather icon library
 import { PVWebSocket } from '../services/WebSocketManager';
 import { DataBuffer } from '../services/DataBuffer';
 import { PLOT_CONFIG, PLOT_LAYOUT_TEMPLATE } from '../utils/constants';
 import { usePlotStore } from '../stores/usePlotStore';
 import './MultiPVPlot.css';
 
+
+//
 export default function MultiPVPlot({ plotId, pvNames }) {
   const [plotData, setPlotData] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState({});
   const [yAxisRange, setYAxisRange] = useState(null);
-  const [xAxisRange, setXAxisRange] = useState(null);
-  const [revision, setRevision] = useState(0);
+  const [revision, setRevision] = useState(0); // Force plot updates
   const buffersRef = useRef({});
   const websocketsRef = useRef({});
   const updateTimerRef = useRef(null);
-  
-  const { 
-    removePlot, 
-    removePVFromPlot,
-    timeSyncEnabled,
-    globalTimeWindow
-  } = usePlotStore();
+  const { removePlot, removePVFromPlot } = usePlotStore();
 
-  // Export data function for a single PV
+  // Export data function
   const exportData = (pvName) => {
     const buffer = buffersRef.current[pvName];
     
@@ -44,7 +39,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement('a'); //archor tag
     link.href = url;
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -58,7 +53,6 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     console.log(`✅ Exported ${data.x.length} data points for ${pvName}`);
   };
 
-  // Export all data for multi-PV plots
   const exportAllData = () => {
     if (pvNames.length === 1) {
       exportData(pvNames[0]);
@@ -74,13 +68,13 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       alert('No data to export');
       return;
     }
-    
+    //merge ['Timestamp'] to pvNames
     const header = ['Timestamp'].concat(pvNames.map(pv => `${pv}_Value`));
     const allTimestamps = new Set();
     allData.forEach(data => {
       data.x.forEach(time => allTimestamps.add(time.getTime()));
     });
-    
+    //sort out timestamps
     const sortedTimestamps = Array.from(allTimestamps).sort();
     
     const rows = sortedTimestamps.map(timestamp => {
@@ -94,9 +88,10 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       
       return row.join(',');
     });
-    
+    //merge arrays
     const csv = [header.join(',')].concat(rows).join('\n');
    
+    //blob (binary language object) convert csv to blob object
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -117,15 +112,18 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   useEffect(() => {
     console.log(`🔧 Initializing plot for PVs:`, pvNames);
 
+    //create independent connections for each PV 
     pvNames.forEach((pvName) => {
       if (!buffersRef.current[pvName]) {
+	//create independent data buffer for each PV
         buffersRef.current[pvName] = new DataBuffer(PLOT_CONFIG.MAX_POINTS);
-        
+        //create a websocket instance and connect
         const ws = new PVWebSocket(
           pvName,
-          (value, timestamp) => {
+          (value, timestamp) => {      //onData/callback execute when new data arrives
             buffersRef.current[pvName].addPoint(value, timestamp);
           },
+	  //Other callbacks
           (error) => {
             console.error(`Error for ${pvName}:`, error);
             setConnectionStatus((prev) => ({ ...prev, [pvName]: 'error' }));
@@ -140,8 +138,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         setConnectionStatus((prev) => ({ ...prev, [pvName]: 'connecting' }));
       }
     });
-    
+	
     // Cleanup removed PVs
+    // when a PV exists in buffersRef but Not in the new pvNames list, it means this PV has been removed 
     Object.keys(buffersRef.current).forEach((pvName) => {
       if (!pvNames.includes(pvName)) {
         websocketsRef.current[pvName]?.disconnect();
@@ -160,41 +159,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     updateTimerRef.current = setInterval(() => {
       updateCount++;
       
-      // Calculate X-axis range FIRST (before filtering data)
-      let xMin = null;
-      let xMax = null;
-      
-
-      //X axis (time) range when time Sync Enabled 
-      if (timeSyncEnabled) {
-        // Rolling time window - always end at NOW
-        const now = new Date();
-        xMax = now;
-        xMin = new Date(now.getTime() - globalTimeWindow * 1000);
-      }
-
-      //Time Sync Enabled Off, the xMin and xMax are null
-
-
-
       const traces = pvNames.map((pvName) => {
         const buffer = buffersRef.current[pvName];
-        let data = buffer ? buffer.getData() : { x: [], y: [] };
-        
-        // If time sync is enabled, filter data to only show points within the time window
-        if (timeSyncEnabled && xMin && xMax && data.x.length > 0) {
-          const filteredIndices = [];
-          data.x.forEach((time, idx) => {
-            if (time >= xMin && time <= xMax) {
-              filteredIndices.push(idx);
-            }
-          });
-          
-          data = {
-            x: filteredIndices.map(i => data.x[i]),
-            y: filteredIndices.map(i => data.y[i])
-          };
-        }
+        const data = buffer ? buffer.getData() : { x: [], y: [] };
         
         return {
           x: data.x,
@@ -207,10 +174,14 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         };
       });
 
-      // Calculate Y-axis range from visible data
+      // Calculate Y-axis range
       let allValues = [];
-      traces.forEach((trace) => {
-        allValues = allValues.concat(trace.y);
+      pvNames.forEach((pvName) => {
+        const buffer = buffersRef.current[pvName];
+        if (buffer) {
+          const data = buffer.getData();
+          allValues = allValues.concat(data.y);
+        }
       });
 
       if (allValues.length > 0) {
@@ -219,15 +190,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         const range = max - min;
         const padding = range * 0.1 || 0.0001;
         
-        setYAxisRange([min - padding, max + padding]);
-      }
-
-      // Set X-axis range
-      if (timeSyncEnabled && xMin && xMax) {
-        setXAxisRange([xMin, xMax]);
-      } else {
-        // Auto range - show all data
-        setXAxisRange(null);
+        setYAxisRange([min - padding, max + padding]); //setState function
       }
 
       // Log update info every 10 updates
@@ -237,14 +200,10 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           return sum + (buffer ? buffer.getPointCount() : 0);
         }, 0);
         console.log(`🔄 Plot update #${updateCount}: ${totalPoints} total points across ${pvNames.length} PV(s)`);
-        
-        if (timeSyncEnabled) {
-          console.log(`🕐 Time window: ${xMin?.toLocaleTimeString()} - ${xMax?.toLocaleTimeString()}`);
-        }
       }
 
-      setPlotData(traces);
-      setRevision(prev => prev + 1); // Force plot re-render
+      setPlotData(traces); //setState function
+      setRevision(prev => prev + 1); // setState function; Force plot re-render
       
     }, PLOT_CONFIG.UPDATE_INTERVAL);
 
@@ -258,7 +217,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       }
       Object.values(websocketsRef.current).forEach((ws) => ws.disconnect());
     };
-  }, [pvNames, timeSyncEnabled, globalTimeWindow]);
+  }, [pvNames]);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -274,7 +233,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const plotLayout = {
     ...PLOT_LAYOUT_TEMPLATE,
     title: pvNames.length === 1 ? pvNames[0] : 'Multi-PV Plot',
-    datarevision: revision,
+    datarevision: revision, // Force Plotly to update
     yaxis: {
       ...PLOT_LAYOUT_TEMPLATE.yaxis,
       autorange: yAxisRange ? false : true,
@@ -285,9 +244,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     xaxis: {
       ...PLOT_LAYOUT_TEMPLATE.xaxis,
       type: 'date',
-      tickformat: '%H:%M:%S',
-      autorange: xAxisRange ? false : true,
-      range: xAxisRange
+      tickformat: '%H:%M:%S'
     },
     margin: { l: 70, r: 30, t: 40, b: 50 }
   };
@@ -295,22 +252,16 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   return (
     <div className="plot-widget">
       <div className="plot-header">
-	   
         <div className="pv-tags">
-	  {/*
           {pvNames.map((pvName) => (
             <div key={pvName} className="pv-tag">
-		   
-              {getStatusIcon(connectionStatus[pvName])}
-	      
+              {getStatusIcon(connectionStatus[pvName])}  //connection status of each PV
               <span className="pv-name">{pvName}</span>
-	      
               {buffersRef.current[pvName] && (
                 <span className="pv-count">
                   ({buffersRef.current[pvName].getPointCount()})
                 </span>
               )}
-	      
               {pvNames.length > 1 && (
                 <button
                   className="pv-remove"
@@ -320,10 +271,8 @@ export default function MultiPVPlot({ plotId, pvNames }) {
                   <X size={12} />
                 </button>
               )}
-	      
             </div>
           ))}
-	  */}
         </div>
 
         <div className="plot-actions">
@@ -351,7 +300,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           layout={plotLayout}
           config={{
             responsive: true,
-            displayModeBar: false,
+            displayModeBar: true,
             displaylogo: false,
             modeBarButtonsToRemove: ['lasso2d', 'select2d'],
             toImageButtonOptions: {

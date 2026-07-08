@@ -1,68 +1,114 @@
 // src/stores/usePlotStore.js
 import { create } from 'zustand';
-//zustand, state management library from react
-export const usePlotStore = create((set) => ({
-  plots: [],
-  nextPlotId: 1,
+import { persist, createJSONStorage } from 'zustand/middleware';
 
-  addPlot: (pvNames) =>
-    set((state) => {
-      // New plot configuration - full width, stacked vertically
-      const newPlot = {
-        id: state.nextPlotId,
-        pvNames: Array.isArray(pvNames) ? pvNames : [pvNames],
-        x: 0,                           // Always start at column 0 (left edge)
-        y: state.plots.length * 4,      // Stack vertically (each plot is 4 rows)
-        w: 12,                          // Full width (all 12 columns)
-        h: 4                            // 4 rows height (taller for better visibility)
-      };
-      //
-      return {  
-	//create a new array, keep existing plots and append the new plot at the end.
-        plots: [...state.plots, newPlot],
-        nextPlotId: state.nextPlotId + 1
-      };
-    }),
+let nextPlotId = 1;
 
-  removePlot: (plotId) =>
-    set((state) => ({
-      plots: state.plots.filter((plot) => plot.id !== plotId)
-    })),
-
-  removePVFromPlot: (plotId, pvName) =>
-    set((state) => ({
-      plots: state.plots
-        .map((plot) => {
-          if (plot.id === plotId) {
-            const newPvNames = plot.pvNames.filter((pv) => pv !== pvName);
-            if (newPvNames.length === 0) return null;
-            return { ...plot, pvNames: newPvNames };
-          }
-          return plot;
-        })
-        .filter(Boolean)
-    })),
-  // allow the users to change the playout
-  updateLayout: (newLayout) =>
-    set((state) => ({
-      plots: state.plots.map((plot) => {
-        const layoutItem = newLayout.find((item) => item.i === plot.id.toString());
-        if (layoutItem) {
-          return {
-            ...plot,
-            x: layoutItem.x,
-            y: layoutItem.y,
-            w: layoutItem.w,
-            h: layoutItem.h
-          };
-        }
-        return plot;
-      })
-    })),
-
-  clearAll: () =>
-    set(() => ({
+export const usePlotStore = create(
+  persist(
+    (set, get) => ({
       plots: [],
-      nextPlotId: 1
-    }))
-}));
+      
+      // Time synchronization settings
+      timeSyncEnabled: true,
+      globalTimeWindow: 60, // seconds to display (default 60s)
+      
+      // Toggle time synchronization
+      toggleTimeSync: () => {
+        set((state) => ({
+          timeSyncEnabled: !state.timeSyncEnabled
+        }));
+        console.log(`🕐 Time sync: ${get().timeSyncEnabled ? 'ON' : 'OFF'}`);
+      },
+      
+      // Set global time window
+      setTimeWindow: (seconds) => {
+        set({ globalTimeWindow: seconds });
+        console.log(`🕐 Time window set to: ${seconds}s`);
+      },
+
+      addPlot: (pvNames) => {
+        const plots = get().plots;
+        const newPlot = {
+          id: nextPlotId++,
+          pvNames: Array.isArray(pvNames) ? pvNames : [pvNames],
+          x: (plots.length * 3) % 12,
+          y: Math.floor((plots.length * 3) / 12) * 3,
+          w: 6,
+          h: 3
+        };
+        
+        set({ plots: [...plots, newPlot] });
+        console.log(`✅ Plot added:`, newPlot);
+      },
+
+      removePlot: (plotId) => {
+        set((state) => ({
+          plots: state.plots.filter((plot) => plot.id !== plotId)
+        }));
+        console.log(`🗑️ Plot removed: ${plotId}`);
+      },
+
+      removePVFromPlot: (plotId, pvName) => {
+        set((state) => ({
+          plots: state.plots.map((plot) => {
+            if (plot.id === plotId) {
+              const updatedPVs = plot.pvNames.filter((pv) => pv !== pvName);
+              return updatedPVs.length > 0
+                ? { ...plot, pvNames: updatedPVs }
+                : null;
+            }
+            return plot;
+          }).filter(Boolean)
+        }));
+        console.log(`🗑️ PV removed: ${pvName} from plot ${plotId}`);
+      },
+
+      updateLayout: (newLayout) => {
+        set((state) => ({
+          plots: state.plots.map((plot) => {
+            const layoutItem = newLayout.find((item) => item.i === plot.id.toString());
+            if (layoutItem) {
+              return {
+                ...plot,
+                x: layoutItem.x,
+                y: layoutItem.y,
+                w: layoutItem.w,
+                h: layoutItem.h
+              };
+            }
+            return plot;
+          })
+        }));
+      },
+
+      clearAll: () => {
+        set({ plots: [] });
+        nextPlotId = 1;
+        console.log('🗑️ All plots cleared');
+      }
+    }),
+    {
+      name: 'epics-plot-storage',
+      storage: createJSONStorage(() => localStorage),
+      
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          const maxId = state.plots.reduce((max, plot) => 
+            Math.max(max, plot.id), 0
+          );
+          nextPlotId = maxId + 1;
+          
+          console.log(`🔄 State rehydrated: ${state.plots.length} plots restored`);
+          console.log(`📊 Next plot ID will be: ${nextPlotId}`);
+        }
+      },
+      
+      partialize: (state) => ({ 
+        plots: state.plots,
+        timeSyncEnabled: state.timeSyncEnabled,
+        globalTimeWindow: state.globalTimeWindow
+      })
+    }
+  )
+);
