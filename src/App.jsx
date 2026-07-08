@@ -8,7 +8,19 @@ import './App.css';
 function App() {
   const [pvInput, setPvInput] = useState('');
   const [showInfo, setShowInfo] = useState(false);
-  
+
+  const [selectedPlotSize, setSelectedPlotSize] = useState('1*1');
+  const plotsize_options = [
+	  {value:'[1,1]', label:'1*1', width: 4, height: 3},
+	  {value:'[1,2]', label:'1*2', width: 8, height: 3},
+	  {value:'[2,1]', label:'2*1', width: 4, height: 6},
+	  {value:'[2,2]', label:'2*2', width: 8, height: 6},
+  ];
+  //handle change events when a user picks an option
+  const handlePlotSizeChange = (event)=>{
+	  setSelectedPlotSize(event.target.value);
+  }
+
   const { 
     plots, 
     addPlot, 
@@ -42,8 +54,11 @@ function App() {
       alert('Please enter valid PV name(s)');
       return;
     }
-    
-    addPlot(pvNames);
+    const option = plotsize_options.find(
+      o => o.value === selectedPlotSize
+    );
+
+    addPlot(pvNames, option.width, option.height);
     setPvInput('');
   };
 
@@ -86,6 +101,16 @@ function App() {
             onChange={(e) => setPvInput(e.target.value)}
             onKeyPress={handleKeyPress}
           />
+	<select className="plot-size-select" value={selectedPlotSize} onChange={handlePlotSizeChange}>
+           <option value="" disabled>-- Choose an option --</option>
+        
+           {plotsize_options.map((option) => (
+             <option key={option.value} value={option.value}>
+               {option.label}
+             </option>
+           ))}
+         </select>
+
           <button
             className="btn btn-primary"
             onClick={handleAddPlot}

@@ -217,7 +217,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         const min = Math.min(...allValues);
         const max = Math.max(...allValues);
         const range = max - min;
-        const padding = range * 0.1 || 0.0001;
+        const padding = range * 0.2 || 0.0001;
         
         setYAxisRange([min - padding, max + padding]);
       }

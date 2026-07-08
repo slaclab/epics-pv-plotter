@@ -98,6 +98,26 @@ html, body {
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
+.plot-size-select {
+  height: 45px;
+  font-size: 1.1rem;
+  border: 2px solid #e2e8f0;
+  background: white;
+  color: #2c3e50;
+}
+
+.plot-size-select:hover {
+  border-color: #667eea;
+}
+
+.plot-size-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+}
+
+
+
 /* Vertical Separator */
 .separator {
   width: 1px;
