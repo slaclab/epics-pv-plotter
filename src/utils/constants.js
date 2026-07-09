@@ -64,15 +64,25 @@ export const PLOT_LAYOUT_TEMPLATE = {
   
   hovermode: 'closest',           // Hover tooltip mode
   showlegend: true,               // Show plot legend
-  
+ 
   legend: {
-    x: 1,                         // Legend horizontal position (0-1)
-    xanchor: 'right',             // Legend horizontal anchor point
-    y: 1,                         // Legend vertical position (0-1)
-    bgcolor: 'rgba(255, 255, 255, 0.8)',  // Legend background color
-    bordercolor: '#ddd',          // Legend border color
-    borderwidth: 1                // Legend border width
+    x: 0.01,
+    y: 1,
+    xanchor: 'left',           // 
+    yanchor: 'top',
+    orientation: 'v',
+    width: 0.32,               // 
+    bgcolor: 'rgba(255,255,255,0.95)',
+    bordercolor: '#d0d0d0',
+    borderwidth: 1,
+    font: { size: 11 },
+    traceorder: 'normal',
+    itemclick: false,
+    itemdoubleclick: false
   }
+
+
+
 };
 
 // ================================================================
@@ -86,3 +96,40 @@ export const COLORS = {
   error: '#ef4444',               // Error state color (red)
   info: '#3b82f6'                 // Informational color (blue)
 };
+
+
+export const PV_COLORS = [
+  '#1f77b4', // 1. blue
+  '#ff7f0e', // 2. orange
+  '#2ca02c', // 3. green
+  '#d62728', // 4. red
+  '#9467bd', // 5. purpole
+  '#8c564b', // 6. brown
+  '#e377c2', // 7. pink
+  '#7f7f7f', // 8. green
+  '#bcbd22', // 9. yellow gree
+  '#17becf', // 10. 
+  '#aec7e8', // 11. light blue
+  '#ffbb78', // 12. light orange
+  '#98df8a', // 13. light green
+  '#ff9896', // 14. light red
+  '#c5b0d5'  // 15. light purple
+
+];
+
+// global color projection（ useRef or store to maintain）
+export const pvColorMap = new Map();
+
+export const getPVColor = (pvName) => {
+  if (!pvColorMap.has(pvName)) {
+    const index = pvColorMap.size % PV_COLORS.length;
+    pvColorMap.set(pvName, PV_COLORS[index]);
+  }
+  return pvColorMap.get(pvName);
+};
+
+
+
+
+
+

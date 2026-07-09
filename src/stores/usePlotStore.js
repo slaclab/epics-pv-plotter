@@ -12,47 +12,57 @@ export const usePlotStore = create(
       
       // Time synchronization settings
       timeSyncEnabled: true,
-      globalTimeWindow: 60, // seconds to display (default 60s)
-      
+      globalTimeWindow: 60,
+
+      latestValues: {},
+
+      // Update a single PV's latest value
+      updateLatestValue: (pvName, value, timestamp) => {
+        set((state) => ({
+          latestValues: {
+            ...state.latestValues,
+            [pvName]: { value, timestamp }
+          }
+        }));
+      },
+
+
+
       // Toggle time synchronization
       toggleTimeSync: () => {
         set((state) => ({
           timeSyncEnabled: !state.timeSyncEnabled
         }));
-        console.log(`🕐 Time sync: ${get().timeSyncEnabled ? 'ON' : 'OFF'}`);
+        console.log(`Time sync: ${get().timeSyncEnabled ? 'ON' : 'OFF'}`);
       },
       
       // Set global time window
       setTimeWindow: (seconds) => {
         set({ globalTimeWindow: seconds });
-        console.log(`🕐 Time window set to: ${seconds}s`);
+        console.log(`Time window set to: ${seconds}s`);
       },
 
-      // add plot layout
-      
-      addPlot: (pvNames) => {
+      // Add plot with automatic layout calculation
+      addPlot: (pvNames, width, height) => {
         const plots = get().plots;
         
-        // calculate number of Plots per row
-        const plotsPerRow = Math.floor(PLOT_CONFIG.GRID_COLS / PLOT_CONFIG.DEFAULT_WIDTH);
-        // 12 / 4 = 3 ( 3 plots)
+        const newPlotWidth = PLOT_CONFIG.DEFAULT_WIDTH * width;
+        const newPlotHeight = PLOT_CONFIG.DEFAULT_HEIGHT * height;
         
-        const plotIndex = plots.length;
+        // Find the best position for the new plot
+        const position = findBestPosition(plots, newPlotWidth, newPlotHeight);
         
         const newPlot = {
           id: nextPlotId++,
           pvNames: Array.isArray(pvNames) ? pvNames : [pvNames],
-          
-          // ✅ get the precise position of each plot
-          x: (plotIndex % plotsPerRow) * PLOT_CONFIG.DEFAULT_WIDTH,
-          y: Math.floor(plotIndex / plotsPerRow) * PLOT_CONFIG.DEFAULT_HEIGHT,
-          
-          w: PLOT_CONFIG.DEFAULT_WIDTH,   // 4
-          h: PLOT_CONFIG.DEFAULT_HEIGHT   // 3
+          x: position.x,
+          y: position.y,
+          w: newPlotWidth,
+          h: newPlotHeight
         };
         
         set({ plots: [...plots, newPlot] });
-        console.log(`✅ Plot added at (${newPlot.x}, ${newPlot.y}):`, newPlot);
+        console.log(`Plot added at (${newPlot.x}, ${newPlot.y}), size: ${newPlot.w}x${newPlot.h}`, newPlot);
       },
 
       // Remove Plot 
@@ -60,7 +70,7 @@ export const usePlotStore = create(
         set((state) => ({
           plots: state.plots.filter((plot) => plot.id !== plotId)
         }));
-        console.log(`🗑️ Plot removed: ${plotId}`);
+        console.log(`Plot removed: ${plotId}`);
       },
 
       removePVFromPlot: (plotId, pvName) => {
@@ -75,7 +85,7 @@ export const usePlotStore = create(
             return plot;
           }).filter(Boolean)
         }));
-        console.log(`🗑️ PV removed: ${pvName} from plot ${plotId}`);
+        console.log(`PV removed: ${pvName} from plot ${plotId}`);
       },
 
       updateLayout: (newLayout) => {
@@ -99,7 +109,7 @@ export const usePlotStore = create(
       clearAll: () => {
         set({ plots: [] });
         nextPlotId = 1;
-        console.log('🗑️ All plots cleared');
+        console.log('All plots cleared');
       }
     }),
     {
@@ -113,8 +123,8 @@ export const usePlotStore = create(
           );
           nextPlotId = maxId + 1;
           
-          console.log(`🔄 State rehydrated: ${state.plots.length} plots restored`);
-          console.log(`📊 Next plot ID will be: ${nextPlotId}`);
+          console.log(`State rehydrated: ${state.plots.length} plots restored`);
+          console.log(`Next plot ID will be: ${nextPlotId}`);
         }
       },
       
@@ -126,3 +136,53 @@ export const usePlotStore = create(
     }
   )
 );
+
+// Helper function to find the best position for a new plot
+function findBestPosition(existingPlots, width, height) {
+  if (existingPlots.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const gridCols = PLOT_CONFIG.GRID_COLS;
+  
+  // Try to place in rows, starting from y=0
+  let currentRow = 0;
+  
+  while (true) {
+    // Try each column position in this row
+    for (let col = 0; col <= gridCols - width; col++) {
+      const candidate = { x: col, y: currentRow };
+      
+      // Check if this position conflicts with any existing plot
+      const hasConflict = existingPlots.some(plot => 
+        rectanglesOverlap(
+          candidate.x, candidate.y, width, height,
+          plot.x, plot.y, plot.w, plot.h
+        )
+      );
+      
+      if (!hasConflict) {
+        return candidate;
+      }
+    }
+    
+    // Move to next row
+    currentRow += PLOT_CONFIG.DEFAULT_HEIGHT;
+    
+    // Safety check: don't go beyond reasonable rows
+    if (currentRow > 100) {
+      console.warn('Could not find position, placing at end');
+      return { x: 0, y: currentRow };
+    }
+  }
+}
+
+// Helper function to check if two rectangles overlap
+function rectanglesOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
+  return !(
+    x1 + w1 <= x2 ||  // rect1 is left of rect2
+    x2 + w2 <= x1 ||  // rect2 is left of rect1
+    y1 + h1 <= y2 ||  // rect1 is above rect2
+    y2 + h2 <= y1     // rect2 is above rect1
+  );
+}

@@ -7,6 +7,7 @@ import { DataBuffer } from '../services/DataBuffer';
 import { PLOT_CONFIG, PLOT_LAYOUT_TEMPLATE } from '../utils/constants';
 import { usePlotStore } from '../stores/usePlotStore';
 import './MultiPVPlot.css';
+import {getPVColor} from '../utils/constants';
 
 export default function MultiPVPlot({ plotId, pvNames }) {
   const [plotData, setPlotData] = useState([]);
@@ -17,13 +18,22 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const buffersRef = useRef({});
   const websocketsRef = useRef({});
   const updateTimerRef = useRef(null);
-  
+
+
   const { 
     removePlot, 
     removePVFromPlot,
     timeSyncEnabled,
-    globalTimeWindow
+    globalTimeWindow,
+    updateLatestValue
   } = usePlotStore();
+
+
+  const getTraceColor = (pvName) => {
+    return getPVColor(pvName);
+  };
+
+
 
   // Export data function for a single PV
   const exportData = (pvName) => {
@@ -125,6 +135,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           pvName,
           (value, timestamp) => {
             buffersRef.current[pvName].addPoint(value, timestamp);
+            updateLatestValue(pvName, value, timestamp);
           },
           (error) => {
             console.error(`Error for ${pvName}:`, error);
@@ -202,7 +213,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           type: 'scatter',
           mode: 'lines+markers',
           name: pvName,
-          line: { width: 2 },
+          line: { width: 2 , color:getTraceColor(pvName)},
           marker: { size: 4 }
         };
       });
@@ -273,7 +284,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
 
   const plotLayout = {
     ...PLOT_LAYOUT_TEMPLATE,
-    title: pvNames.length === 1 ? pvNames[0] : 'Multi-PV Plot',
+    //title: pvNames.length === 1 ? pvNames[0] : 'Multi-PV Plot',
     datarevision: revision,
     showlegend: true,
 
@@ -367,6 +378,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           useResizeHandler={true}
         />
       </div>
+
+
+
     </div>
   );
 }

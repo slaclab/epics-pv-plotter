@@ -24,7 +24,7 @@ export default function PlotGrid() {
       h: plot.h,
       minW: 3,
       minH: 2,
-      maxH: 6,        // 可选：限制最大高度
+      maxH: 6,        // Optional
     })), 
     [plots]
   );
@@ -56,13 +56,13 @@ export default function PlotGrid() {
     <div className="plot-grid-container">
       <ResponsiveGridLayout
         className="plot-grid"
-        layouts={{ lg: layout }}           // 使用 layouts 而非 layout
+        layouts={{ lg: layout }}           // use layouts not layout
         breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
         cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
         rowHeight={PLOT_CONFIG.ROW_HEIGHT}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".plot-header"
-        compactType="vertical"             // 推荐使用 vertical
+        compactType="vertical"             // recommend vertical
         preventCollision={false}
         isDraggable={true}
         isResizable={true}

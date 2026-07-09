@@ -20,11 +20,13 @@ html, body {
 }
 
 .app {
-  min-height: 100vh;
+  /*min-height: 100vh;*/
   width: 100%;
+  min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .app-header {
@@ -71,6 +73,18 @@ html, body {
   margin-right: auto;
   width: 100%;
 }
+
+.plot-grid-container {
+  flex: 1 1 auto;                     /* */
+  width: 100%;
+  padding: 1rem;
+  box-sizing: border-box;
+  overflow-y: auto;            /*  */
+  overflow-x: hidden;
+  min-height: 0;               /*  */
+}
+
+
 
 /* Input Group - Single Row Layout with All Controls */
 .input-group {
@@ -352,6 +366,63 @@ html, body {
     font-size: 1.5rem;
   }
 }
+
+
+/* global right side bar */
+.right-sidebar {
+  width: 260px;
+  background: white;
+  border-left: 1px solid #dee2e6;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid #dee2e6;
+  font-weight: 600;
+  color: #333;
+  background: #f8f9fa;
+}
+
+.sidebar-content {
+  padding: 0.75rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.value-item {
+  padding: 0.65rem;
+  margin-bottom: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+
+.pv-name {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.pv-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #1f77b4;
+  margin: 0.3rem 0;
+}
+
+.pv-time {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+
+
+
 
 @media (max-width: 480px) {
   .header-content h1 {

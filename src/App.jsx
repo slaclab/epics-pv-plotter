@@ -11,16 +11,15 @@ function App() {
 
   const [selectedPlotSize, setSelectedPlotSize] = useState('1*1');
   const plotsize_options = [
-	  {value:'[1,1]', label:'1*1', width: 4, height: 3},
-	  {value:'[1,2]', label:'1*2', width: 8, height: 3},
-	  {value:'[2,1]', label:'2*1', width: 4, height: 6},
-	  {value:'[2,2]', label:'2*2', width: 8, height: 6},
+	  {value:'1*1', label:'1*1', width: 1, height: 1},
+	  {value:'1*2', label:'1*2', width: 1, height: 2},
+	  {value:'2*1', label:'2*1', width: 2, height: 1},
+	  {value:'2*2', label:'2*2', width: 2, height: 2},
   ];
   //handle change events when a user picks an option
   const handlePlotSizeChange = (event)=>{
 	  setSelectedPlotSize(event.target.value);
   }
-
   const { 
     plots, 
     addPlot, 
@@ -28,7 +27,8 @@ function App() {
     timeSyncEnabled,
     globalTimeWindow,
     toggleTimeSync,
-    setTimeWindow
+    setTimeWindow,
+    latestValues
   } = usePlotStore();
 
   useEffect(() => {
@@ -187,8 +187,59 @@ function App() {
         )}
       </div>
 
-      <PlotGrid />
+      <div className="main-content" style={{ 
+        display: 'flex', 
+        flex: 1, 
+        overflow: 'hidden',
+        minHeight: 'calc(100vh - 80px)'   // adjust the height
+      }}>
+      
+        {/* Plot */}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <PlotGrid />
+        </div>
+
+
+
+
+        <div className="right-sidebar">
+          <div className="sidebar-header">
+            Live PV Values ({plots.reduce((sum, p) => sum + p.pvNames.length, 0)})
+          </div>
+
+          <div className="sidebar-content">
+            {[...new Set(plots.flatMap(plot => plot.pvNames))].map(pvName => {
+              const val = latestValues?.[pvName];
+              return (
+                <div key={pvName} className="value-item">
+                  <div className="pv-name">{pvName}</div>
+                  <div className="pv-value">
+                    {val ? Number(val.value).toFixed(5) : '---'}
+                  </div>
+                  {val && (
+                    <div className="pv-time">
+                      {new Date(val.timestamp*1000).toLocaleTimeString()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+      </div>
     </div>
+
+
+
+
+
+
+
+
+
+
+
   );
 }
 
