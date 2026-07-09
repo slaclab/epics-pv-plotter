@@ -462,14 +462,13 @@ async def websocket_endpoint(
             try:
                 # Construct update message
 
-                raw_ts = event.metadata.timestamp
-                now = datetime.now()
-                log.info(f"🕐 raw_ts={raw_ts}")
-                log.info(f"   fromtimestamp={datetime.fromtimestamp(raw_ts)}")
-                log.info(f"   now={now}")
-                log.info(f"   diff_days={(datetime.fromtimestamp(raw_ts)-now).total_seconds()/86400:.3f}")
-                log.info(f"   attrs={[a for a in dir(event.metadata) if not a.startswith('_')]}")
-
+                if log.isEnabledFor(logging.DEBUG):
+                    raw_ts = event.metadata.timestamp
+                    now = datetime.now()
+                    log.debug(f"🕐 raw_ts={raw_ts}")
+                    log.debug(f"   fromtimestamp={datetime.fromtimestamp(raw_ts)}")
+                    log.debug(f"   now={now}")
+                    log.debug(f"   diff_days={(datetime.fromtimestamp(raw_ts) - now).total_seconds() / 86400:.3f}")
 
                 data = {
                     'value': extract_value(event.data),
