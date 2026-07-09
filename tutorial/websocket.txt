@@ -3,8 +3,8 @@ this.ws.onmessage = (event) => { ... };
 this.ws.onerror = (error) => { ... };
 this.ws.onclose = () => { ... };
 
-onopen, onmessage, onerror, onclose are event handler properties 
-that store functions(values are functions)
+Onopen, onmessage, onerror, and onclose are event handler properties
+that store functions (values are functions).
 
 
 
