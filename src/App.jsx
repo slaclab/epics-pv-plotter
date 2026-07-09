@@ -54,9 +54,8 @@ function App() {
       alert('Please enter valid PV name(s)');
       return;
     }
-    const option = plotsize_options.find(
-      o => o.value === selectedPlotSize
-    );
+    const option =
+      plotsize_options.find((o) => o.value === selectedPlotSize) ?? plotsize_options[0];
 
     addPlot(pvNames, option.width, option.height);
     setPvInput('');
