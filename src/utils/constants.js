@@ -88,16 +88,9 @@ export const PLOT_LAYOUT_TEMPLATE = {
 // ================================================================
 // Color Theme Palette
 // ================================================================
-export const COLORS = {
-  primary: '#667eea',             // Primary brand color (purple)
-  secondary: '#764ba2',           // Secondary brand color (darker purple)
-  success: '#10b981',             // Success state color (green)
-  warning: '#f59e0b',             // Warning state color (orange)
-  error: '#ef4444',               // Error state color (red)
-  info: '#3b82f6'                 // Informational color (blue)
-};
-
-
+// ================================================================
+// PV Color Palette (vibrant colors first)
+// ================================================================
 export const PV_COLORS = [
   '#1f77b4', // 1. blue
   '#ff7f0e', // 2. orange
@@ -107,25 +100,38 @@ export const PV_COLORS = [
   '#8c564b', // 6. brown
   '#e377c2', // 7. pink
   '#7f7f7f', // 8. gray
-  '#bcbd22', // 9. yellow green
-  '#17becf', // 10. 
+  '#bcbd22', // 9. yellow-green
+  '#17becf', // 10. cyan
+  // fallback lighter shades (used only after the vibrant ones run out)
   '#aec7e8', // 11. light blue
   '#ffbb78', // 12. light orange
   '#98df8a', // 13. light green
   '#ff9896', // 14. light red
   '#c5b0d5'  // 15. light purple
-
 ];
 
+// ================================================================
+// Persistent PV -> color assignment
+//   Same PV name always gets the same color across ALL plots.
+//   Colors are assigned in order of first appearance (blue, orange, green, ...).
+// ================================================================
+const pvColorMap = new Map();   // pvName -> color string
+let nextColorIndex = 0;
+
 export const getPVColor = (pvName) => {
-  // Deterministic mapping without unbounded memory growth
-  let hash = 0;
-  for (let i = 0; i < pvName.length; i++) {
-    hash = (hash * 31 + pvName.charCodeAt(i)) >>> 0;
+  if (!pvColorMap.has(pvName)) {
+    const color = PV_COLORS[nextColorIndex % PV_COLORS.length];
+    pvColorMap.set(pvName, color);
+    nextColorIndex++;
   }
-  return PV_COLORS[hash % PV_COLORS.length];
+  return pvColorMap.get(pvName);
 };
 
+// Optional: reset assignments (e.g. when clearing all plots)
+export const resetPVColors = () => {
+  pvColorMap.clear();
+  nextColorIndex = 0;
+};
 
 
 
