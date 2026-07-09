@@ -4,10 +4,9 @@ import Plot from 'react-plotly.js';
 import { X, Wifi, WifiOff, AlertCircle, Download } from 'lucide-react';
 import { PVWebSocket } from '../services/WebSocketManager';
 import { DataBuffer } from '../services/DataBuffer';
-import { PLOT_CONFIG, PLOT_LAYOUT_TEMPLATE } from '../utils/constants';
+import { PLOT_CONFIG, PLOT_LAYOUT_TEMPLATE, getPVColor } from '../utils/constants';
 import { usePlotStore } from '../stores/usePlotStore';
 import './MultiPVPlot.css';
-import { getPVColor } from '../utils/constants';
 
 export default function MultiPVPlot({ plotId, pvNames }) {
   // Toggle to show/hide the per-PV tags (status icon, point count, remove button).
