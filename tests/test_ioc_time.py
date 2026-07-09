@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from caproto.asyncio.client import Context
 
-async def test_time():
+async def main():
     print("=" * 70)
     print("🕐 IOC Timestamp Test")
     print("=" * 70)
