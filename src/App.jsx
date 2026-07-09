@@ -11,15 +11,15 @@ function App() {
 
   const [selectedPlotSize, setSelectedPlotSize] = useState('1*1');
   const plotsize_options = [
-	  {value:'1*1', label:'1*1', width: 1, height: 1},
-	  {value:'1*2', label:'1*2', width: 1, height: 2},
-	  {value:'2*1', label:'2*1', width: 2, height: 1},
-	  {value:'2*2', label:'2*2', width: 2, height: 2},
+    { value: '1*1', label: '1*1', width: 1, height: 1 },
+    { value: '1*2', label: '1*2', width: 1, height: 2 },
+    { value: '2*1', label: '2*1', width: 2, height: 1 },
+    { value: '2*2', label: '2*2', width: 2, height: 2 },
   ];
   //handle change events when a user picks an option
-  const handlePlotSizeChange = (event)=>{
-	  setSelectedPlotSize(event.target.value);
-  }
+  const handlePlotSizeChange = (event) => {
+    setSelectedPlotSize(event.target.value);
+  };
   const { 
     plots, 
     addPlot, 
