@@ -3,12 +3,12 @@
 .plot-grid-container {
   width: 100%;
   max-width: 100%;
-  /*min-height: calc(100vh - 200px);*/
+  min-height: calc(100vh - 200px);
   margin: 0;
   padding: 1rem;
   box-sizing: border-box;
   overflow-x: hidden;
-  /*overflow-y: auto;*/
+  overflow-y: auto;
   max-width: 100%;
   position: relative;
 }
@@ -17,22 +17,18 @@
   position: relative;
   width: 100% !important;
   min-width: 100%;
-  min-height: fit-content;
 }
 
 /* Override react-grid-layout default width */
 .react-grid-layout {
   width: 100% !important;
   min-width: 100%;
-  min-height: fit-content;
 }
-
 
 /* Ensure grid items don't overflow */
 .react-grid-item {
   box-sizing: border-box;
-  overflow: visible; /*hidden;*/
-  transition: all 0.2s ease;
+  overflow: hidden;
 }
 
 .react-grid-item > .react-resizable-handle {

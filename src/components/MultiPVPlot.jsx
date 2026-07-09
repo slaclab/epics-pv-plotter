@@ -219,7 +219,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         const range = max - min;
         const padding = range * 0.2 || 0.0001;
         
-        setYAxisRange([min - padding, max + padding]);
+        setYAxisRange([min - padding*0.8, max + padding*3.]);
       }
 
       // Set X-axis range
@@ -275,6 +275,8 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     ...PLOT_LAYOUT_TEMPLATE,
     title: pvNames.length === 1 ? pvNames[0] : 'Multi-PV Plot',
     datarevision: revision,
+    showlegend: true,
+
     yaxis: {
       ...PLOT_LAYOUT_TEMPLATE.yaxis,
       autorange: yAxisRange ? false : true,
@@ -289,7 +291,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       autorange: xAxisRange ? false : true,
       range: xAxisRange
     },
-    margin: { l: 70, r: 30, t: 40, b: 50 }
+    margin: { l: 85, r: 30, t: 40, b: 50 }
   };
 
   return (
