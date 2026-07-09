@@ -171,14 +171,21 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       }
     });
 
+    // No cleanup here: pvNames changes are handled above (connect new PVs / disconnect removed PVs).
+    // Cleanup happens on unmount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pvNames]);
+
+  // Disconnect everything on unmount only
+  useEffect(() => {
     return () => {
-      console.log(`🛑 Disconnecting all websockets for:`, pvNames);
+      console.log('🛑 Disconnecting all websockets (unmount)');
       Object.values(websocketsRef.current).forEach((ws) => ws.disconnect());
       websocketsRef.current = {};
       buffersRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pvNames]);
+  }, []);
 
   // ============================================================
   // Effect 2: Periodic plot redraw timer
