@@ -9,7 +9,7 @@ function App() {
   const [pvInput, setPvInput] = useState('');
   const [showInfo, setShowInfo] = useState(false);
 
-  const [selectedPlotSize, setSelectedPlotSize] = useState('1*1');
+  const [selectedPlotSize, setSelectedPlotSize] = useState('[1,1]');
   const plotsize_options = [
 	  {value:'1*1', label:'1*1', width: 1, height: 1},
 	  {value:'1*2', label:'1*2', width: 1, height: 2},
