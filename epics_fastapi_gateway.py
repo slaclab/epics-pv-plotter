@@ -461,6 +461,15 @@ async def websocket_endpoint(
         async for event in subscription:
             try:
                 # Construct update message
+
+                if log.isEnabledFor(logging.DEBUG):
+                    raw_ts = event.metadata.timestamp
+                    now = datetime.now()
+                    log.debug(f"🕐 raw_ts={raw_ts}")
+                    log.debug(f"   fromtimestamp={datetime.fromtimestamp(raw_ts)}")
+                    log.debug(f"   now={now}")
+                    log.debug(f"   diff_days={(datetime.fromtimestamp(raw_ts) - now).total_seconds() / 86400:.3f}")
+
                 data = {
                     'value': extract_value(event.data),
                     'timestamp': event.metadata.timestamp,

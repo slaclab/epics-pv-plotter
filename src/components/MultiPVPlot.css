@@ -124,6 +124,18 @@
   overflow: hidden;
 }
 
+
+.value-panel {
+  width: 180px;
+  background: #f8f9fa;
+  border-left: 1px solid #dee2e6;
+  padding: 0.75rem 0.5rem;
+  overflow-y: auto;
+  font-size: 0.9rem;
+}
+
+
+
 .status-icon {
   flex-shrink: 0;
 }

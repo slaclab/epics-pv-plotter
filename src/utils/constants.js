@@ -20,12 +20,12 @@ export const WS_CONFIG = {
 // ================================================================
 export const PLOT_CONFIG = {
   // Data buffer settings
-  MAX_POINTS: 1000,               // Maximum number of data points stored per PV
+  MAX_POINTS: 6000,               // Maximum number of data points stored per PV
   UPDATE_INTERVAL: 100,           // Plot update interval (milliseconds)
   
   // Grid layout settings
   GRID_COLS: 12,                  // Number of columns in the grid layout
-  ROW_HEIGHT: 100,                // Height of each row (pixels)
+  ROW_HEIGHT: 120,                // Height of each row (pixels)
   
   // Default plot dimensions (in grid units)
   DEFAULT_WIDTH: 4,               // Default width of a plot widget
@@ -64,25 +64,76 @@ export const PLOT_LAYOUT_TEMPLATE = {
   
   hovermode: 'closest',           // Hover tooltip mode
   showlegend: true,               // Show plot legend
-  
+ 
   legend: {
-    x: 1,                         // Legend horizontal position (0-1)
-    xanchor: 'right',             // Legend horizontal anchor point
-    y: 1,                         // Legend vertical position (0-1)
-    bgcolor: 'rgba(255, 255, 255, 0.8)',  // Legend background color
-    bordercolor: '#ddd',          // Legend border color
-    borderwidth: 1                // Legend border width
+    x: 0.01,
+    y: 1,
+    xanchor: 'left',           // 
+    yanchor: 'top',
+    orientation: 'v',
+    width: 0.32,               // 
+    bgcolor: 'rgba(255,255,255,0.95)',
+    bordercolor: '#d0d0d0',
+    borderwidth: 1,
+    font: { size: 11 },
+    traceorder: 'normal',
+    itemclick: false,
+    itemdoubleclick: false
   }
+
+
+
 };
 
 // ================================================================
 // Color Theme Palette
 // ================================================================
-export const COLORS = {
-  primary: '#667eea',             // Primary brand color (purple)
-  secondary: '#764ba2',           // Secondary brand color (darker purple)
-  success: '#10b981',             // Success state color (green)
-  warning: '#f59e0b',             // Warning state color (orange)
-  error: '#ef4444',               // Error state color (red)
-  info: '#3b82f6'                 // Informational color (blue)
+// ================================================================
+// PV Color Palette (vibrant colors first)
+// ================================================================
+export const PV_COLORS = [
+  '#1f77b4', // 1. blue
+  '#ff7f0e', // 2. orange
+  '#2ca02c', // 3. green
+  '#d62728', // 4. red
+  '#9467bd', // 5. purple
+  '#8c564b', // 6. brown
+  '#e377c2', // 7. pink
+  '#7f7f7f', // 8. gray
+  '#bcbd22', // 9. yellow-green
+  '#17becf', // 10. cyan
+  // fallback lighter shades (used only after the vibrant ones run out)
+  '#aec7e8', // 11. light blue
+  '#ffbb78', // 12. light orange
+  '#98df8a', // 13. light green
+  '#ff9896', // 14. light red
+  '#c5b0d5'  // 15. light purple
+];
+
+// ================================================================
+// Persistent PV -> color assignment
+//   Same PV name always gets the same color across ALL plots.
+//   Colors are assigned in order of first appearance (blue, orange, green, ...).
+// ================================================================
+const pvColorMap = new Map();   // pvName -> color string
+let nextColorIndex = 0;
+
+export const getPVColor = (pvName) => {
+  if (!pvColorMap.has(pvName)) {
+    const color = PV_COLORS[nextColorIndex % PV_COLORS.length];
+    pvColorMap.set(pvName, color);
+    nextColorIndex++;
+  }
+  return pvColorMap.get(pvName);
 };
+
+// Optional: reset assignments (e.g. when clearing all plots)
+export const resetPVColors = () => {
+  pvColorMap.clear();
+  nextColorIndex = 0;
+};
+
+
+
+
+
