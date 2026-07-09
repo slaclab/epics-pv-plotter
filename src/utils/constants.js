@@ -117,15 +117,13 @@ export const PV_COLORS = [
 
 ];
 
-// global color projection（ useRef or store to maintain）
-export const pvColorMap = new Map();
-
 export const getPVColor = (pvName) => {
-  if (!pvColorMap.has(pvName)) {
-    const index = pvColorMap.size % PV_COLORS.length;
-    pvColorMap.set(pvName, PV_COLORS[index]);
+  // Deterministic mapping without unbounded memory growth
+  let hash = 0;
+  for (let i = 0; i < pvName.length; i++) {
+    hash = (hash * 31 + pvName.charCodeAt(i)) >>> 0;
   }
-  return pvColorMap.get(pvName);
+  return PV_COLORS[hash % PV_COLORS.length];
 };
 
 
