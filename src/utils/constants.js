@@ -103,7 +103,7 @@ export const PV_COLORS = [
   '#ff7f0e', // 2. orange
   '#2ca02c', // 3. green
   '#d62728', // 4. red
-  '#9467bd', // 5. purpole
+  '#9467bd', // 5. purple
   '#8c564b', // 6. brown
   '#e377c2', // 7. pink
   '#7f7f7f', // 8. green
