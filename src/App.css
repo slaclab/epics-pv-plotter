@@ -402,20 +402,20 @@ html, body {
   border: 1px solid #eee;
 }
 
-.pv-name {
+.right-sidebar .pv-name {
   font-family: 'Courier New', monospace;
   font-size: 0.85rem;
   color: #555;
 }
 
-.pv-value {
+.right-sidebar .pv-value {
   font-size: 1.4rem;
   font-weight: 700;
   color: #1f77b4;
   margin: 0.3rem 0;
 }
 
-.pv-time {
+.right-sidebar .pv-time {
   font-size: 0.75rem;
   color: #888;
 }
