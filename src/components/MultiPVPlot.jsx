@@ -44,7 +44,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       alert('No data to export');
       return;
     }
-
+    
     const data = buffer.getData();
 
     const csv = ['Timestamp,Value']
@@ -199,12 +199,33 @@ export default function MultiPVPlot({ plotId, pvNames }) {
 
       let xMin = null;
       let xMax = null;
-
+      
+      // use the last point data time stamp to replace current time
       if (timeSyncEnabled) {
-        const now = new Date();
-        xMax = now;
-        xMin = new Date(now.getTime() - globalTimeWindow * 1000);
+        // Anchor the window's right edge to the newest DATA timestamp,
+        // not the front-end wall clock (they can differ if clocks aren't synced).
+        let latest = null;
+        pvNames.forEach((pvName) => {
+          const buffer = buffersRef.current[pvName];
+          const ts = buffer ? buffer.getLatestTimestamp() : null;
+          if (ts && (!latest || ts > latest)) {
+            latest = ts;
+          }
+        });
+      
+        // Use latest data time as the right edge; fall back to now if no data yet
+        xMax = latest || new Date();
+        xMin = new Date(xMax.getTime() - globalTimeWindow * 1000);
       }
+
+
+
+
+      //if (timeSyncEnabled) {
+      //  const now = new Date();
+      //  xMax = now;
+      //  xMin = new Date(now.getTime() - globalTimeWindow * 1000);
+      //}
 
       const traces = pvNames.map((pvName) => {
         const buffer = buffersRef.current[pvName];
