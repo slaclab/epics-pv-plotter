@@ -23,3 +23,28 @@ Method 3: Using gunicorn (best for production)
     		--bind 0.0.0.0:8000 \
     		--access-logfile - \
     		--error-logfile -
+
+1. Create the React + Vite Project Run one of the following commands in your terminal:bash
+
+# Latest version (recommended)
+npm create vite@latest
+
+# Or specify a version
+npm create vite@latest my-project -- --template react
+
+Alternatively, you can do it in one command:bash
+
+npm create vite@latest my-project -- --template react-ts
+
+2. Navigate to the Project Directorybash
+
+cd my-project
+
+3. Install Dependenciesbash
+
+npm install
+
+4. Start the Development Serverbash
+
+npm run dev
+
