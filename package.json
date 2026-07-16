@@ -17,7 +17,7 @@
     "react-dom": "^18.2.0",
     "react-grid-layout": "^1.5.3",
     "react-plotly.js": "^2.6.0",
-    "ws": "^8.16.0",
+    "ws": "^8.21.1",
     "zustand": "^4.5.7"
   },
   "devDependencies": {
