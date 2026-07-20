@@ -201,6 +201,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       let xMax = null;
       
       // use the last point data time stamp to replace current time
+      
       if (timeSyncEnabled) {
         // Anchor the window's right edge to the newest DATA timestamp,
         // not the front-end wall clock (they can differ if clocks aren't synced).
@@ -217,10 +218,10 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         xMax = latest || new Date();
         xMin = new Date(xMax.getTime() - globalTimeWindow * 1000);
       }
+      
 
 
-
-
+      
       //if (timeSyncEnabled) {
       //  const now = new Date();
       //  xMax = now;
