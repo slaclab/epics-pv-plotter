@@ -20,7 +20,7 @@ export const WS_CONFIG = {
 // ================================================================
 export const PLOT_CONFIG = {
   // Data buffer settings
-  MAX_POINTS: 6000,               // Maximum number of data points stored per PV
+  MAX_POINTS: 1000,               // Maximum number of data points stored per PV
   UPDATE_INTERVAL: 100,           // Plot update interval (milliseconds)
   
   // Grid layout settings

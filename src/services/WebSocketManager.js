@@ -17,22 +17,26 @@ export class PVWebSocket {
     this.reconnectTimer = null;
     this.messageCount = 0; // Track number of messages received
   }
-
+  //called when the WebSocket connection is opened
   connect() {
     try {
+      //WS_CONFIG.BASE_URL saved in utils/constant.js IP address + Port Number
+      //encodeURIComponent: convert special characters into UTF-8 + percent-encoding
       const wsUrl = `${WS_CONFIG.BASE_URL}/ws?pv=${encodeURIComponent(this.pvName)}`;
       
       console.log(`🔗 Connecting to: ${wsUrl}`);
       this.ws = new WebSocket(wsUrl);
 
-      //
+      //Fire when the WebSocket handshake completes and the connection is open
       this.ws.onopen = () => {
         console.log(`✅ Connected: ${this.pvName}`);
         this.reconnectAttempts = 0;
         this.messageCount = 0;
+	//call onConnect callbackfunction/Notify the caller if it is passed
         if (this.onConnect) this.onConnect();
       };
-      //
+
+      //WebSocket Message Event Handler
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -59,7 +63,7 @@ export class PVWebSocket {
           if (this.onError) this.onError('Data parse error');
         }
       };
-      //
+      //WebSocket Error Handler
       this.ws.onerror = (error) => {
         // Only log error if not initial connection attempt
         if (this.reconnectAttempts > 0) {

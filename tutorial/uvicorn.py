@@ -9,7 +9,7 @@ async def serve():
     # 2. 🔥 call app.startup()
     await app.startup()
     # all the code before yield execution in lifespan
-    # CA_CONTEXT 已创建
+    # CA_CONTEXT created
     
     # 3. list to the connection
     await server.start_listening()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import websockets
-
+from urllib.parse import quote
 async def test():
 
     # get Uniform Resource Identifier (URI)
@@ -31,7 +31,11 @@ async def test():
     
     - Fragment (#section1) is NOT sent to server (browser-only)
     '''
-    uri = "ws://192.168.22.4:8082?pv=BL22:SCAN:MASTER:ADC1"
+    pv = "BL22:SCAN:MASTER:ADC1"
+    uri = f"ws://192.168.22.4:8000/ws?pv={quote(pv)}"
+
+
+
     #uri = "ws://192.168.22.4:8082?pv=BL22:SRS570_AMP1:NAME"
     print(f"Connecting to {uri}...")
     
