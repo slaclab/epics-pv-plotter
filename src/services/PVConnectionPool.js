@@ -6,10 +6,15 @@ class PVConnectionPool {
     this.pool = new Map();
   }
 
+  //called in MultiPVPlot.jsx,  e.g. pool.subscribe("ADC1", { onData, onError, onConnect })
+  //returns on unsubscribe() function
   subscribe(pvName, callbacks) {
     let entry = this.pool.get(pvName);
 
     if (!entry) {
+      
+
+      console.log(`[POOL] creating new connection for ${pvName}`);
       const subscribers = new Set();
 
       // Create ONE shared PVWebSocket for this PV
@@ -30,6 +35,9 @@ class PVConnectionPool {
       ws.connect();
       entry = { ws, subscribers };
       this.pool.set(pvName, entry);
+    } else{
+      console.log(`[POOL] reusing connection for ${pvName}`);
+	
     }
 
     // Register this subscriber (one per plot per PV)
@@ -40,6 +48,7 @@ class PVConnectionPool {
     };
 
     entry.subscribers.add(subscriber);
+    console.log(`[POOL] ${pvName} subscribers=${entry.subscribers.size}, activeConns=${this.pool.size}`);
 
     // Return an unsubscribe function
     return () => {
