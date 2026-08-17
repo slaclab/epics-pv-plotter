@@ -5,7 +5,7 @@
 # Can be run manually for testing, or invoked by systemd.
 #
 
-set -e   # 出错即退出
+set -e   # Exit on error
 
 # ------------------------------------------------------------
 # 1. 加载 nvm（关键：让 node/npm 可用）
