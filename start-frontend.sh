@@ -8,25 +8,25 @@
 set -e   # Exit on error
 
 # ------------------------------------------------------------
-# 1. 加载 nvm（关键：让 node/npm 可用）
+# 1. load nvm（important: let node/npm available）
 # ------------------------------------------------------------
 export NVM_DIR="/home/b_bluesky/.nvm"
 # shellcheck disable=SC1091
 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
-# 使用指定的 node 版本（和你 which node 一致）
+# use the correct version of  node （ which node ）
 nvm use v20.11.1 >/dev/null 2>&1 || true
 
-# 兜底：直接把 node bin 目录加进 PATH
+# add node bin to PATH
 export PATH="/home/b_bluesky/.nvm/versions/node/v20.11.1/bin:$PATH"
 
 # ------------------------------------------------------------
-# 2. 进入项目目录
+# 2. get into main directory
 # ------------------------------------------------------------
 cd /home/b_bluesky/Documents/epics-pv-plotter
 
 # ------------------------------------------------------------
-# 3. 打印环境信息（方便调试）
+# 3. print out details
 # ------------------------------------------------------------
 echo "=========================================="
 echo " Starting EPICS PV Plotter Frontend"
@@ -36,8 +36,8 @@ echo " cwd : $(pwd)"
 echo "=========================================="
 
 # ------------------------------------------------------------
-# 4. 启动 Vite dev server
-#    exec 让 npm 进程替换当前 shell，便于 systemd 正确管理进程
+# 4. Start Vite dev server
+#    exec let npm process shell，used for  systemd to manage ongoing processes
 # ------------------------------------------------------------
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-5173}"
