@@ -39,4 +39,6 @@ echo "=========================================="
 # 4. 启动 Vite dev server
 #    exec 让 npm 进程替换当前 shell，便于 systemd 正确管理进程
 # ------------------------------------------------------------
-exec npm run dev -- --host 0.0.0.0 --port 5173
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-5173}"
+exec npm run dev -- --host "$HOST" --port "$PORT"
