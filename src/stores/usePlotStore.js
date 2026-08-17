@@ -6,7 +6,7 @@ import { PLOT_CONFIG } from "../utils/constants";
 let nextPlotId = 1;
 
 export const usePlotStore = create(
-  persist(
+  persist(   // wrap the store with persist to memory
     (set, get) => ({
       plots: [],
 
@@ -27,6 +27,7 @@ export const usePlotStore = create(
       },
 
       // Toggle time synchronization
+      // New Values depends on the old one
       toggleTimeSync: () => {
         set((state) => ({
           timeSyncEnabled: !state.timeSyncEnabled,
@@ -43,7 +44,7 @@ export const usePlotStore = create(
       // Add plot with automatic layout calculation
       addPlot: (pvNames, width, height) => {
         const plots = get().plots;
-
+        //calculated new Plot width and height
         const newPlotWidth = PLOT_CONFIG.DEFAULT_WIDTH * width;
         const newPlotHeight = PLOT_CONFIG.DEFAULT_HEIGHT * height;
 
@@ -58,7 +59,7 @@ export const usePlotStore = create(
           w: newPlotWidth,
           h: newPlotHeight,
         };
-
+  
         set({ plots: [...plots, newPlot] });
         console.log(
           `Plot added at (${newPlot.x}, ${newPlot.y}), size: ${newPlot.w}x${newPlot.h}`,
@@ -133,8 +134,8 @@ export const usePlotStore = create(
           console.log(`Next plot ID will be: ${nextPlotId}`);
         }
       },
-
-      partialize: (state) => ({
+      // choose which parts of the state get persisted to localStorage 
+      partialize: (state) => ({ 
         plots: state.plots,
         timeSyncEnabled: state.timeSyncEnabled,
         globalTimeWindow: state.globalTimeWindow,
@@ -145,10 +146,12 @@ export const usePlotStore = create(
 
 // Helper function to find the best position for a new plot
 function findBestPosition(existingPlots, width, height) {
+  //if no plot exists, return to 0,0
   if (existingPlots.length === 0) {
     return { x: 0, y: 0 };
   }
 
+  //get Grid Cols defined on constants.js
   const gridCols = PLOT_CONFIG.GRID_COLS;
 
   // Try to place in rows, starting from y=0

@@ -42,18 +42,20 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     }
 
     const data = buffer.getData();
-
+    //construct csv string
     const csv = ["Timestamp,Value"]
       .concat(
         data.x.map((time, i) => `${time.toISOString()},${data.y[i]}`)
       )
       .join("\n");
-
+    //Wrap the CSV text in a Blob (a build-in browser API) object  
+    //tagged as a UTF-8 CSV file so the browser treats it as a downloable .csv file
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob); //generate a temperal download url pointing to the blob in memmery
+    const link = document.createElement("a"); //hyperlink component
     link.href = url;
 
+    //time stamp as part of the file name
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     link.download = `${pvName}_${timestamp}.csv`;
 
@@ -121,15 +123,18 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   };
 
   // Effect 1: subscribe/unsubscribe PVs for this plot
+  // This effect keeps the actually-subscribed PVs in sync with the `pvNames` prop.
+  // It runs whenever `pvNames` changes: it subscribes new PVs and unsubscribes removed ones. 
   useEffect(() => {
     console.log("Sync subscriptions:", pvNames);
 
     // Subscribe new PVs
     pvNames.forEach((pvName) => {
-      if (!buffersRef.current[pvName]) {
+      if (!buffersRef.current[pvName]) {  //key check: does this PV already have a buffer
         buffersRef.current[pvName] = new DataBuffer(PLOT_CONFIG.MAX_POINTS);
+	//set the status of this PV into connecting
         setConnectionStatus((prev) => ({ ...prev, [pvName]: "connecting" }));
-
+        //subscribe this PV by sending PV name and callbacks
         const unsubscribe = pvConnectionPool.subscribe(pvName, {
           onData: (value, timestamp) => {
             const buf = buffersRef.current[pvName];
@@ -192,7 +197,8 @@ export default function MultiPVPlot({ plotId, pvNames }) {
 
       let xMin = null;
       let xMax = null;
-
+      
+      //recalcualte xMax, xMin when timeSyncEnabled	    
       if (timeSyncEnabled) {
         let latest = null;
         pvNames.forEach((pvName) => {
@@ -204,7 +210,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         xMax = latest || new Date();
         xMin = new Date(xMax.getTime() - globalTimeWindow * 1000);
       }
-
+      //Read data from buffer and generated traces
       const traces = pvNames.map((pvName) => {
         const buffer = buffersRef.current[pvName];
         let data = buffer ? buffer.getData() : { x: [], y: [] };
@@ -214,6 +220,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           data.x.forEach((t, i) => {
             if (t >= xMin && t <= xMax) idxs.push(i);
           });
+	  //two new arrays containing only the in-window points still paired
           data = { x: idxs.map((i) => data.x[i]), y: idxs.map((i) => data.y[i]) };
         }
 
@@ -227,12 +234,13 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           marker: { size: 4 },
         };
       });
-
+      //collect every y-value (PV value) from all traces into one flat array,
+      //comput the overall min/max across all PVs for Y axis scaling
       let allValues = [];
       traces.forEach((trace) => {
         allValues = allValues.concat(trace.y);
       });
-
+      
       if (allValues.length > 0) {
         const min = Math.min(...allValues);
         const max = Math.max(...allValues);
@@ -246,7 +254,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       } else {
         setXAxisRange(null);
       }
-
+      //every 10th update, log the total number of buffered poits across all PVs for debugging
       if (updateCount % 10 === 0) {
         const totalPoints = pvNames.reduce((sum, pvName) => {
           const buffer = buffersRef.current[pvName];
@@ -258,7 +266,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       }
 
       setPlotData(traces);
-      setRevision((prev) => prev + 1);
+      // Bump revision so Plotly's `datarevision` changes, forcing a redraw
+      // (prevents Plotly from skipping the update when it thinks the data is unchanged).
+      setRevision((prev) => prev + 1);  //
     }, PLOT_CONFIG.UPDATE_INTERVAL);
 
     console.log(`Plot update timer started (${PLOT_CONFIG.UPDATE_INTERVAL}ms)`);
@@ -272,6 +282,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pvNames, timeSyncEnabled, globalTimeWindow]);
 
+  // Returns a connection-status icon based on the status string.
+  // Note: currently unused in the UI because SHOW_PV_TAGS is false (PV tags are hidden).
+  
   const getStatusIcon = (status) => {
     switch (status) {
       case "connected":
@@ -282,11 +295,12 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         return <WifiOff size={14} className="status-icon connecting" />;
     }
   };
-
+  // Build the Plotly layout object. These keys follow the Plotly.js layout spec
+  // 
   const plotLayout = {
-    ...PLOT_LAYOUT_TEMPLATE,
-    datarevision: revision,
-    showlegend: true,
+    ...PLOT_LAYOUT_TEMPLATE,//spread the shared default layout from constants.js
+    datarevision: revision, //redraw signal: bump this to force Plotly to re-render
+    showlegend: true, //show the legend
     yaxis: {
       ...PLOT_LAYOUT_TEMPLATE.yaxis,
       autorange: yAxisRange ? false : true,

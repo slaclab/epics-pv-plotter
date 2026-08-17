@@ -10,7 +10,7 @@ class PVConnectionPool {
   //returns on unsubscribe() function
   subscribe(pvName, callbacks) {
     let entry = this.pool.get(pvName);
-
+    //if the PV doesn't exist in the pool
     if (!entry) {
       
 
@@ -18,10 +18,12 @@ class PVConnectionPool {
       const subscribers = new Set();
 
       // Create ONE shared PVWebSocket for this PV
+      // 
       const ws = new PVWebSocket(
         pvName,
         (value, timestamp) => {
           // Fan-out to all subscribers of this PV
+	  // optional chaining(?.) means the callback is only called if it exists
           subscribers.forEach((s) => s.onData?.(value, timestamp));
         },
         (error) => {
@@ -31,8 +33,9 @@ class PVConnectionPool {
           subscribers.forEach((s) => s.onConnect?.());
         }
       );
-
+      //websocket connection,
       ws.connect();
+      //create a new entry and add to the pool
       entry = { ws, subscribers };
       this.pool.set(pvName, entry);
     } else{
