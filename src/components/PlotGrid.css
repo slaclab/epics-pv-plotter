@@ -8,13 +8,9 @@
   padding: 1rem;
   box-sizing: border-box;
   overflow-x: hidden;
-<<<<<<< HEAD
-  max-width: 100%;
-=======
   /*overflow-y: auto;*/
   max-width: 100%;
   position: relative;
->>>>>>> feature/work-space
 }
 
 .plot-grid {

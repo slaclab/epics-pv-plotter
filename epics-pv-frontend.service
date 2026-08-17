@@ -1,0 +1,16 @@
+[Unit]
+Description=EPICS PV Plotter Frontend (Vite Dev Server)
+After=network.target
+
+[Service]
+Type=simple
+User=b_bluesky
+WorkingDirectory=/home/b_bluesky/Documents/epics-pv-plotter
+ExecStart=/usr/bin/bash /home/b_bluesky/Documents/epics-pv-plotter/start-frontend.sh
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

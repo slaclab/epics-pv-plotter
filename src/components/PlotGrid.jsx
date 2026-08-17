@@ -1,9 +1,5 @@
 // src/components/PlotGrid.jsx
 import { useMemo } from 'react';
-<<<<<<< HEAD
-import GridLayout from 'react-grid-layout';
-=======
->>>>>>> feature/work-space
 import { Responsive, WidthProvider } from "react-grid-layout";
 
 import { usePlotStore } from '../stores/usePlotStore';
@@ -14,11 +10,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import './PlotGrid.css';
 
-<<<<<<< HEAD
-const ResponsiveGridLayout = WidthProvider(GridLayout);
-=======
 const ResponsiveGridLayout = WidthProvider(Responsive);
->>>>>>> feature/work-space
 
 export default function PlotGrid() {
   const { plots, updateLayout } = usePlotStore();
