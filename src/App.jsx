@@ -259,7 +259,7 @@ function App() {
         display: 'flex', 
         flex: 1, 
         overflow: 'hidden',
-        minHeight: 'calc(100vh - 80px)'   // adjust the height
+        //minHeight: 'calc(100vh - 80px)'   // adjust the height
       }}>
       
         {/* Plot */}

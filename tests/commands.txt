@@ -1,0 +1,1 @@
+websocat 'ws://localhost:8000/ws?pv=SPEAR:BeamCurrAvg'

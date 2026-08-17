@@ -1,0 +1,101 @@
+## WebSocket Data Format (Server → Client/FastAPI Gateway)
+
+The gateway streams PV updates as JSON messages over WebSocket.
+
+Example payload:
+
+```json
+{
+  "pv": "SPEAR:BeamCurrAvg",
+  "value": 305.12,
+  "timestamp": 1782321020.304764,
+  "status": 0,
+  "severity": 0
+}
+```
+
+Field descriptions:
+- `pv`: PV name
+- `value`: PV value (scalar or array, JSON-serializable)
+- `timestamp`: EPICS timestamp (seconds since Unix epoch)
+- `status`: EPICS alarm status
+- `severity`: EPICS alarm severity
+
+---
+
+## Frontend WebSocket Connection Management (`PVWebSocket`)
+
+Raw WebSocket usage in the browser requires handling several concerns:
+- Building the URL correctly
+- Handling `open` / `message` / `error` / `close` events
+- Parsing JSON safely
+- Reconnecting when the connection drops
+- Cleaning up timers and connections when the component unmounts
+
+To encapsulate this logic, the frontend uses the `PVWebSocket` class.
+
+### Responsibilities
+
+`PVWebSocket` does four main things:
+1. **Connect** to the gateway endpoint: `/ws?pv=...`
+2. **Receive and parse messages**, then forward values to the UI via callbacks
+3. **Handle errors** consistently
+4. **Reconnect automatically** if the connection closes unexpectedly
+
+### Constructor (callback-based design)
+
+```js
+new PVWebSocket(pvName, onData, onError, onConnect)
+```
+
+Parameters:
+- `pvName`: PV to subscribe to
+- `onData(value, timestamp)`: called on every PV update
+- `onError(message)`: called on error conditions
+- `onConnect()`: called when the WebSocket connection is opened
+
+This callback-based design keeps connection mechanics inside the manager, while the UI decides how to render or store incoming data.
+
+Internal state initialized by the constructor:
+- `ws`: the underlying browser `WebSocket` object
+- `reconnectAttempts` / `reconnectTimer`: reconnection control
+- `messageCount`: debug counter to confirm updates are arriving
+
+---
+
+## Connection Lifecycle
+
+### `connect()`: URL construction and event handlers
+
+`connect()` builds a URL like:
+
+```
+ws://HOST/ws?pv=<encoded PV name>
+```
+
+Then it creates the WebSocket and attaches handlers:
+
+- `onopen`: reset counters and call `onConnect()`
+- `onmessage`:
+  - parse JSON
+  - if the payload contains `{ "error": ... }`, call `onError(...)`
+  - otherwise increment `messageCount` and call `onData(data.value, data.timestamp)`
+- `onerror`: report connection errors (optionally reduced logging noise on first attempt)
+- `onclose`: trigger reconnection logic
+
+### `attemptReconnect()`: reconnection strategy
+
+When the socket closes:
+- stop after `MAX_RECONNECT_ATTEMPTS`
+- otherwise wait `RECONNECT_DELAY` milliseconds and call `connect()` again
+
+This improves resilience during transient network issues or gateway restarts.
+
+### `disconnect()`: cleanup (React lifecycle)
+
+When the UI no longer needs the PV (e.g., component unmount), call `disconnect()` to:
+- cancel any scheduled reconnection timer
+- close the WebSocket
+- release resources
+
+---

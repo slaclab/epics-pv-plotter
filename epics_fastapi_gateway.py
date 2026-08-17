@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi import Response
 import uvicorn
 
 from caproto.asyncio.client import Context
@@ -313,6 +314,17 @@ ws.onclose = () => {
     """
     return html
 
+@app.head("/health")
+async def health_head():
+    return Response(
+
+            status_code=200,
+            headers={
+                "X-Status": "healthy",
+                "X-Active-Connections": str(len(active_subscriptions)),
+                },
+
+            )
 
 @app.get("/health")
 async def health_check():

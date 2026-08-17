@@ -210,12 +210,16 @@ async def main():
     # Register signal handlers
     # Signal Terminate : command, Signal Interrupt : keyborad
     # call the handler when the loop gets signal
+    # Signal Interrupt, Ctrl + C
+    # Signal Terminate kill <pid>
     for sig in (signal.SIGTERM, signal.SIGINT):
+
         loop.add_signal_handler(sig, signal_handler)
     
     # Start WebSocket server
     try:
         async with websockets.serve(handle_client, HOST, PORT):
+            # let stop event wait until get signal to stop
             await stop_event.wait()
     finally:
         # Clean up all active subscriptions
