@@ -1,7 +1,12 @@
-# Set EPICS environment variables for your network (192.168.22.x)
+#source .venv_ioc312/bin/activate
 
-export EPICS_CA_ADDR_LIST="192.168.22.255"  # Broadcast for your subnet
-export EPICS_CA_AUTO_ADDR_LIST=YES
-export EPICS_PVA_ADDR_LIST="192.168.22.255"
-export EPICS_PVA_AUTO_ADDR_LIST=YES
+export HTTP_PROXY=http://134.79.44.164:3128
+export HTTPS_PROXY=http://134.79.44.164:3128
+# (optional, sometimes needed)
+export NO_PROXY=localhost,127.0.0.1
+export EPICS_CA_MAX_ARRAY_BYTES=8000000
+
+export EPICS_CA_ADDR_LIST='192.168.22.26:5064 192.168.22.49:5064 192.168.22.4 192.168.22.5:5074 192.168.22.5:5076 192.168.22.5:5078 192.168.22.5:5080 spearca1:5100 192.168.22.5:5174'
+# export EPICS_CA_ADDR_LIST='192.168.22.4'
+export EPICS_CA_AUTO_ADDR_LIST=NO
 
