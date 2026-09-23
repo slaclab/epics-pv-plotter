@@ -234,137 +234,149 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   // Effect 2: periodic plot redraw
   useEffect(() => {
     let updateCount = 0;
-  
+    //----------------------------------
     const updateTimer = setInterval(() => {
-      updateCount += 1;
-	    
       const stats = statsRef.current;
       const plotUpdateTime = performance.now();
-      
-      stats.plottedInWindow += 1;
-      
-      // Measure the delay from receiving the newest data point
-      // to scheduling it for the next plot update.
-      if (
-        stats.latestSequence !== stats.plottedSequence &&
-        stats.latestReceiveTime !== null
-      ) {
-        stats.latestPlotDelay =
-          plotUpdateTime - stats.latestReceiveTime;
-      
-        stats.plottedSequence = stats.latestSequence;
-      }
-
-
-
-  
-      let xMin = null;
-      let xMax = null;
-  
-      // Calculate synchronized X-axis range.
-      if (timeSyncEnabled) {
-        let latest = null;
-  
-        pvNames.forEach((pvName) => {
-          const buffer = buffersRef.current[pvName];
-          const timestamp = buffer
-            ? buffer.getLatestTimestamp()
-            : null;
-  
-          if (timestamp && (!latest || timestamp > latest)) {
-            latest = timestamp;
-          }
-        });
-  
-        // Follow the latest received PV timestamp.
-        xMax = latest || new Date();
-        xMin = new Date(
-          xMax.getTime() - globalTimeWindow * 1000
-        );
-      }
-  
-      // Generate Plotly traces from the current buffers.
-      const traces = pvNames.map((pvName) => {
-        const buffer = buffersRef.current[pvName];
-  
-        let data = buffer
-          ? buffer.getData()
-          : { x: [], y: [] };
-  
-        // Keep only points inside the selected time window.
-        if (
-          timeSyncEnabled &&
-          xMin &&
-          xMax &&
-          data.x.length > 0
-        ) {
-          const filteredX = [];
-          const filteredY = [];
-  
-          for (let index = 0; index < data.x.length; index += 1) {
-            const timestamp = data.x[index];
-  
-            if (timestamp >= xMin && timestamp <= xMax) {
-              filteredX.push(timestamp);
-              filteredY.push(data.y[index]);
+    
+      const hasNewData =
+        stats.latestSequence !== stats.plottedSequence;
+    
+      if (hasNewData) {
+        updateCount += 1;
+    
+        // Capture the newest sequence included in this update.
+        const sequenceBeingPlotted = stats.latestSequence;
+    
+        // Measure the time from the latest data receipt
+        // to the start of this plot update.
+        if (stats.latestReceiveTime !== null) {
+          stats.latestPlotDelay =
+            plotUpdateTime - stats.latestReceiveTime;
+        }
+    
+        let xMin = null;
+        let xMax = null;
+    
+        if (timeSyncEnabled) {
+          let latest = null;
+    
+          pvNames.forEach((pvName) => {
+            const buffer = buffersRef.current[pvName];
+    
+            const timestamp = buffer
+              ? buffer.getLatestTimestamp()
+              : null;
+    
+            if (timestamp && (!latest || timestamp > latest)) {
+              latest = timestamp;
             }
+          });
+    
+          xMax = latest || new Date();
+          xMin = new Date(
+            xMax.getTime() - globalTimeWindow * 1000
+          );
+        }
+    
+        const traces = pvNames.map((pvName) => {
+          const buffer = buffersRef.current[pvName];
+    
+          let data = buffer
+            ? buffer.getData()
+            : { x: [], y: [] };
+    
+          if (
+            timeSyncEnabled &&
+            xMin &&
+            xMax &&
+            data.x.length > 0
+          ) {
+            const filteredX = [];
+            const filteredY = [];
+    
+            for (
+              let index = 0;
+              index < data.x.length;
+              index += 1
+            ) {
+              const timestamp = data.x[index];
+    
+              if (timestamp >= xMin && timestamp <= xMax) {
+                filteredX.push(timestamp);
+                filteredY.push(data.y[index]);
+              }
+            }
+    
+            data = {
+              x: filteredX,
+              y: filteredY,
+            };
           }
-  
-          data = {
-            x: filteredX,
-            y: filteredY,
+    
+          return {
+            x: data.x,
+            y: data.y,
+            type: "scattergl",
+            mode: "lines",
+            name: pvName,
+            line: {
+              width: 2,
+              color: getTraceColor(pvName),
+            },
           };
+        });
+    
+        // Recalculate the Y-axis less frequently.
+        if (updateCount === 1 || updateCount % 10 === 0) {
+          const allValues = traces.flatMap(
+            (trace) => trace.y
+          );
+    
+          if (allValues.length > 0) {
+            const min = Math.min(...allValues);
+            const max = Math.max(...allValues);
+            const range = max - min;
+            const padding = range * 0.2 || 0.0001;
+    
+            setYAxisRange([
+              min - padding * 0.8,
+              max + padding * 3.0,
+            ]);
+          }
         }
-  
-        return {
-          x: data.x,
-          y: data.y,
-          type: "scattergl",
-          mode: "lines",
-          name: pvName,
-          line: {
-            width: 2,
-            color: getTraceColor(pvName),
-          },
-        };
-      });
-  
-      /*
-       * Recalculate the Y-axis on the first update and then once
-       * every 10 updates, rather than on every redraw.
-       */
-      if (updateCount === 1 || updateCount % 10 === 0) {
-        const allValues = traces.flatMap((trace) => trace.y);
-  
-        if (allValues.length > 0) {
-          const min = Math.min(...allValues);
-          const max = Math.max(...allValues);
-          const range = max - min;
-          const padding = range * 0.2 || 0.0001;
-  
-          setYAxisRange([
-            min - padding * 0.8,
-            max + padding * 3.0,
-          ]);
+    
+        if (timeSyncEnabled && xMin && xMax) {
+          setXAxisRange([xMin, xMax]);
+        } else {
+          setXAxisRange(null);
         }
+    
+        // Count only real plot update requests.
+        stats.plottedInWindow += 1;
+    
+        setPlotData(traces);
+        setRevision(
+          (previousRevision) => previousRevision + 1
+        );
+    
+        // Mark all data up to this sequence as submitted
+        // in the current plot update.
+        stats.plottedSequence = sequenceBeingPlotted;
       }
-  
-      if (timeSyncEnabled && xMin && xMax) {
-        setXAxisRange([xMin, xMax]);
-      } else {
-        setXAxisRange(null);
-      }
-  
-      /*
-       * Debug logging once every 100 updates.
-       * With a 100 ms interval, this is approximately once every
-       * 10 seconds for each plot.
-       */
-      if (updateCount % 100 === 0) {
+    
+      // Update the displayed statistics even when no new
+      // PV data has arrived.
+      const statsElapsed =
+        plotUpdateTime - stats.windowStart;
+    
+      if (statsElapsed >= 2000) {
+        const elapsedSeconds = statsElapsed / 1000;
+    
         const totalPoints = pvNames.reduce(
           (sum, pvName) => {
             const buffer = buffersRef.current[pvName];
-  
+    
             return (
               sum +
               (buffer ? buffer.getPointCount() : 0)
@@ -372,53 +384,27 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           },
           0
         );
-  
-        console.log(
-          `Plot update #${updateCount}: ` +
-          `${totalPoints} total points across ` +
-          `${pvNames.length} PV(s)`
-        );
-      }
-  
-      setPlotData(traces);
-  
-      // Force Plotly to recognize the data update.
-      setRevision((previousRevision) => previousRevision + 1);
-
-      const statsElapsed =
-        plotUpdateTime - stats.windowStart;
-      
-      if (statsElapsed >= 2000) {
-        const elapsedSeconds = statsElapsed / 1000;
-      
-        const totalPoints = pvNames.reduce(
-          (sum, pvName) => {
-            const buffer = buffersRef.current[pvName];
-      
-            return sum + (buffer ? buffer.getPointCount() : 0);
-          },
-          0
-        );
-      
+    
         setLiveStats({
           dataRate:
             stats.receivedInWindow / elapsedSeconds,
+    
           plotRate:
             stats.plottedInWindow / elapsedSeconds,
+    
           plotDelay: stats.latestPlotDelay,
+    
           totalPoints,
         });
-      
+    
         stats.windowStart = plotUpdateTime;
         stats.receivedInWindow = 0;
         stats.plottedInWindow = 0;
       }
-
-
-
-
     }, PLOT_CONFIG.UPDATE_INTERVAL);
-  
+
+
+    //-----------------------------------	  
     updateTimerRef.current = updateTimer;
   
     console.log(
