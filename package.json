@@ -3,12 +3,30 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+
+  "_scriptsDescription": {
+    "dev": "Start the Vite development server",
+    "build": "Create a production build",
+    "preview": "Preview the production build",
+    "mock-server": "Start the mock EPICS WebSocket server",
+    "start": "Start the mock server and Vite together",
+    "test:e2e": "Run all Playwright tests",
+    "test:e2e:app": "Run application UI tests",
+    "test:e2e:smoke": "Run the Playwright smoke test",
+    "test:e2e:live": "Run the real PV integration test",
+    "test:e2e:report": "Open the Playwright HTML report"
+  },
+
+
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "mock-server": "node mock-epics-server.js",
-    "start": "concurrently \"npm run mock-server\" \"npm run dev\""
+    "start": "concurrently \"npm run mock-server\" \"npm run dev\"",
+    "test:e2e": "playwright test",  
+    "test:e2e:app": "playwright test tests/app.spec.js",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
@@ -21,6 +39,7 @@
     "zustand": "^4.5.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/react": "^18.2.56",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",

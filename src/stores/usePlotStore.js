@@ -1,12 +1,17 @@
 // src/stores/usePlotStore.js
+
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import {
+  persist,
+  createJSONStorage,
+} from "zustand/middleware";
+
 import { PLOT_CONFIG } from "../utils/constants";
 
 let nextPlotId = 1;
 
 export const usePlotStore = create(
-  persist(   // wrap the store with persist to memory
+  persist(
     (set, get) => ({
       plots: [],
 
@@ -14,166 +19,292 @@ export const usePlotStore = create(
       timeSyncEnabled: true,
       globalTimeWindow: 60,
 
-      latestValues: {},
-
-      // Update a single PV's latest value
-      updateLatestValue: (pvName, value, timestamp) => {
-        set((state) => ({
-          latestValues: {
-            ...state.latestValues,
-            [pvName]: { value, timestamp },
-          },
-        }));
-      },
-
-      // Toggle time synchronization
-      // New Values depends on the old one
+      // Toggle global time synchronization
       toggleTimeSync: () => {
         set((state) => ({
           timeSyncEnabled: !state.timeSyncEnabled,
         }));
-        console.log(`Time sync: ${get().timeSyncEnabled ? "ON" : "OFF"}`);
+
+        console.log(
+          `Time sync: ${
+            get().timeSyncEnabled ? "ON" : "OFF"
+          }`
+        );
       },
 
-      // Set global time window
+      // Set the global time window in seconds
       setTimeWindow: (seconds) => {
-        set({ globalTimeWindow: seconds });
-        console.log(`Time window set to: ${seconds}s`);
+        set({
+          globalTimeWindow: seconds,
+        });
+
+        console.log(
+          `Time window set to: ${seconds}s`
+        );
       },
 
-      // Add plot with automatic layout calculation
+      // Add a new plot and calculate its initial position
       addPlot: (pvNames, width, height) => {
-        const plots = get().plots;
-        //calculated new Plot width and height
-        const newPlotWidth = PLOT_CONFIG.DEFAULT_WIDTH * width;
-        const newPlotHeight = PLOT_CONFIG.DEFAULT_HEIGHT * height;
+        const currentPlots = get().plots;
 
-        // Find the best position for the new plot
-        const position = findBestPosition(plots, newPlotWidth, newPlotHeight);
+        const newPlotWidth =
+          PLOT_CONFIG.DEFAULT_WIDTH * width;
+
+        const newPlotHeight =
+          PLOT_CONFIG.DEFAULT_HEIGHT * height;
+
+        const position = findBestPosition(
+          currentPlots,
+          newPlotWidth,
+          newPlotHeight
+        );
 
         const newPlot = {
           id: nextPlotId++,
-          pvNames: Array.isArray(pvNames) ? pvNames : [pvNames],
+          pvNames: Array.isArray(pvNames)
+            ? pvNames
+            : [pvNames],
           x: position.x,
           y: position.y,
           w: newPlotWidth,
           h: newPlotHeight,
         };
-  
-        set({ plots: [...plots, newPlot] });
+
+        set({
+          plots: [...currentPlots, newPlot],
+        });
+
         console.log(
-          `Plot added at (${newPlot.x}, ${newPlot.y}), size: ${newPlot.w}x${newPlot.h}`,
-          newPlot,
+          `Plot added at (${newPlot.x}, ${newPlot.y}), ` +
+            `size: ${newPlot.w}x${newPlot.h}`,
+          newPlot
         );
       },
 
-      // Remove Plot
+      // Remove an entire plot
       removePlot: (plotId) => {
-        set((state) => ({
-          plots: state.plots.filter((plot) => plot.id !== plotId),
-        }));
+        const currentPlots = get().plots;
+
+        const plotExists = currentPlots.some(
+          (plot) => plot.id === plotId
+        );
+
+        if (!plotExists) {
+          return;
+        }
+
+        set({
+          plots: currentPlots.filter(
+            (plot) => plot.id !== plotId
+          ),
+        });
+
         console.log(`Plot removed: ${plotId}`);
       },
 
+      // Remove a PV from a plot
       removePVFromPlot: (plotId, pvName) => {
-        set((state) => ({
-          plots: state.plots
-            .map((plot) => {
-              if (plot.id === plotId) {
-                const updatedPVs = plot.pvNames.filter((pv) => pv !== pvName);
-                return updatedPVs.length > 0
-                  ? { ...plot, pvNames: updatedPVs }
-                  : null;
-              }
+        const currentPlots = get().plots;
+        let changed = false;
+
+        const nextPlots = currentPlots
+          .map((plot) => {
+            if (plot.id !== plotId) {
               return plot;
-            })
-            .filter(Boolean),
-        }));
-        console.log(`PV removed: ${pvName} from plot ${plotId}`);
-      },
-
-      updateLayout: (newLayout) => {
-        set((state) => ({
-          plots: state.plots.map((plot) => {
-            const layoutItem = newLayout.find(
-              (item) => item.i === plot.id.toString(),
-            );
-            if (layoutItem) {
-              return {
-                ...plot,
-                x: layoutItem.x,
-                y: layoutItem.y,
-                w: layoutItem.w,
-                h: layoutItem.h,
-              };
             }
-            return plot;
-          }),
-        }));
+
+            if (!plot.pvNames.includes(pvName)) {
+              return plot;
+            }
+
+            changed = true;
+
+            const updatedPVs = plot.pvNames.filter(
+              (pv) => pv !== pvName
+            );
+
+            if (updatedPVs.length === 0) {
+              return null;
+            }
+
+            return {
+              ...plot,
+              pvNames: updatedPVs,
+            };
+          })
+          .filter(Boolean);
+
+        if (!changed) {
+          return;
+        }
+
+        set({
+          plots: nextPlots,
+        });
+
+        console.log(
+          `PV removed: ${pvName} from plot ${plotId}`
+        );
       },
 
+      // Update plot positions and sizes only when the layout changed
+      updateLayout: (newLayout) => {
+        const currentPlots = get().plots;
+
+        if (!Array.isArray(newLayout)) {
+          return;
+        }
+
+        const layoutMap = new Map(
+          newLayout.map((item) => [
+            item.i,
+            item,
+          ])
+        );
+
+        let changed = false;
+
+        const nextPlots = currentPlots.map((plot) => {
+          const layoutItem = layoutMap.get(
+            plot.id.toString()
+          );
+
+          if (!layoutItem) {
+            return plot;
+          }
+
+          const layoutChanged =
+            plot.x !== layoutItem.x ||
+            plot.y !== layoutItem.y ||
+            plot.w !== layoutItem.w ||
+            plot.h !== layoutItem.h;
+
+          if (!layoutChanged) {
+            return plot;
+          }
+
+          changed = true;
+
+          return {
+            ...plot,
+            x: layoutItem.x,
+            y: layoutItem.y,
+            w: layoutItem.w,
+            h: layoutItem.h,
+          };
+        });
+
+        // Avoid unnecessary store updates and localStorage writes
+        if (!changed) {
+          return;
+        }
+
+        set({
+          plots: nextPlots,
+        });
+      },
+
+      // Remove all plots
       clearAll: () => {
-        set({ plots: [] });
+        if (get().plots.length === 0) {
+          return;
+        }
+
+        set({
+          plots: [],
+        });
+
         nextPlotId = 1;
+
         console.log("All plots cleared");
       },
     }),
     {
       name: "epics-plot-storage",
-      storage: createJSONStorage(() => localStorage),
 
+      storage: createJSONStorage(
+        () => localStorage
+      ),
+
+      // Restore the next available plot ID after page reload
       onRehydrateStorage: () => (state) => {
-        if (state) {
-          const maxId = state.plots.reduce(
-            (max, plot) => Math.max(max, plot.id),
-            0,
-          );
-          nextPlotId = maxId + 1;
-
-          console.log(`State rehydrated: ${state.plots.length} plots restored`);
-          console.log(`Next plot ID will be: ${nextPlotId}`);
+        if (!state) {
+          return;
         }
+
+        const restoredPlots = Array.isArray(
+          state.plots
+        )
+          ? state.plots
+          : [];
+
+        const maxId = restoredPlots.reduce(
+          (maximumId, plot) =>
+            Math.max(maximumId, plot.id),
+          0
+        );
+
+        nextPlotId = maxId + 1;
+
+        console.log(
+          `State rehydrated: ` +
+            `${restoredPlots.length} plots restored`
+        );
+
+        console.log(
+          `Next plot ID will be: ${nextPlotId}`
+        );
       },
-      // choose which parts of the state get persisted to localStorage 
-      partialize: (state) => ({ 
+
+      // Persist only configuration data
+      partialize: (state) => ({
         plots: state.plots,
         timeSyncEnabled: state.timeSyncEnabled,
         globalTimeWindow: state.globalTimeWindow,
       }),
-    },
-  ),
+    }
+  )
 );
 
-// Helper function to find the best position for a new plot
-function findBestPosition(existingPlots, width, height) {
-  //if no plot exists, return to 0,0
+// Find an available position for a new plot
+function findBestPosition(
+  existingPlots,
+  width,
+  height
+) {
   if (existingPlots.length === 0) {
-    return { x: 0, y: 0 };
+    return {
+      x: 0,
+      y: 0,
+    };
   }
 
-  //get Grid Cols defined on constants.js
-  const gridCols = PLOT_CONFIG.GRID_COLS;
-
-  // Try to place in rows, starting from y=0
+  const gridColumns = PLOT_CONFIG.GRID_COLS;
   let currentRow = 0;
 
   while (true) {
-    // Try each column position in this row
-    for (let col = 0; col <= gridCols - width; col++) {
-      const candidate = { x: col, y: currentRow };
+    for (
+      let column = 0;
+      column <= gridColumns - width;
+      column += 1
+    ) {
+      const candidate = {
+        x: column,
+        y: currentRow,
+      };
 
-      // Check if this position conflicts with any existing plot
-      const hasConflict = existingPlots.some((plot) =>
-        rectanglesOverlap(
-          candidate.x,
-          candidate.y,
-          width,
-          height,
-          plot.x,
-          plot.y,
-          plot.w,
-          plot.h,
-        ),
+      const hasConflict = existingPlots.some(
+        (plot) =>
+          rectanglesOverlap(
+            candidate.x,
+            candidate.y,
+            width,
+            height,
+            plot.x,
+            plot.y,
+            plot.w,
+            plot.h
+          )
       );
 
       if (!hasConflict) {
@@ -181,23 +312,37 @@ function findBestPosition(existingPlots, width, height) {
       }
     }
 
-    // Move to next row
     currentRow += PLOT_CONFIG.DEFAULT_HEIGHT;
 
-    // Safety check: don't go beyond reasonable rows
     if (currentRow > 100) {
-      console.warn("Could not find position, placing at end");
-      return { x: 0, y: currentRow };
+      console.warn(
+        "Could not find an available position; " +
+          "placing the plot at the end"
+      );
+
+      return {
+        x: 0,
+        y: currentRow,
+      };
     }
   }
 }
 
-// Helper function to check if two rectangles overlap
-function rectanglesOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
+// Check whether two grid rectangles overlap
+function rectanglesOverlap(
+  x1,
+  y1,
+  width1,
+  height1,
+  x2,
+  y2,
+  width2,
+  height2
+) {
   return !(
-    x1 + w1 <= x2 || // rect1 is left of rect2
-    x2 + w2 <= x1 || // rect2 is left of rect1
-    y1 + h1 <= y2 || // rect1 is above rect2
-    y2 + h2 <= y1 // rect2 is above rect1
+    x1 + width1 <= x2 ||
+    x2 + width2 <= x1 ||
+    y1 + height1 <= y2 ||
+    y2 + height2 <= y1
   );
 }

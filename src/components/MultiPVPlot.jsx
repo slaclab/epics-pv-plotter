@@ -19,17 +19,52 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const [xAxisRange, setXAxisRange] = useState(null);
   const [revision, setRevision] = useState(0);
 
+
+  const [liveStats, setLiveStats] = useState({
+    dataRate: 0,   // Number of PV data message received by this plot per second
+    plotRate: 0,   // Number of plot update requests issued per second
+    plotDelay: null,  // Time in milliseconds between receiving the lastest PV data and starting the next plot updated
+    totalPoints: 0,
+  });
+
+
   const buffersRef = useRef({});          // pvName -> DataBuffer
   const unsubscribersRef = useRef({});    // pvName -> unsubscribe()
   const updateTimerRef = useRef(null);
 
-  const {
-    removePlot,
-    removePVFromPlot,
-    timeSyncEnabled,
-    globalTimeWindow,
-    updateLatestValue,
-  } = usePlotStore();
+  const statsRef = useRef({
+    windowStart: performance.now(), //High resolution start time
+    receivedInWindow: 0,   //Number of PV messaged received during the current window
+    plottedInWindow: 0,    //Number of plot updated requests made during the current window
+    latestSequence: 0,     //Incremented whnever this plot receives a new PV message
+    plottedSequence: 0,    //Sequence number included in the most recent plot update
+    latestReceiveTime: null, //Browser time at which the latest PV message was received
+    latestPlotDelay: null,  //Waiting time from the latest data receipt to the next plot update
+  });
+
+
+
+  //const {
+  //  removePlot,
+  //  removePVFromPlot,
+  //  timeSyncEnabled,
+  //  globalTimeWindow,
+  //updateLatestValue,
+  //} = usePlotStore();
+
+  const removePlot = usePlotStore((state) => state.removePlot);
+  
+  const removePVFromPlot = usePlotStore(
+    (state) => state.removePVFromPlot
+  );
+  
+  const timeSyncEnabled = usePlotStore(
+    (state) => state.timeSyncEnabled
+  );
+  
+  const globalTimeWindow = usePlotStore(
+    (state) => state.globalTimeWindow
+  );
 
   const getTraceColor = (pvName) => getPVColor(pvName);
 
@@ -140,7 +175,15 @@ export default function MultiPVPlot({ plotId, pvNames }) {
             const buf = buffersRef.current[pvName];
             if (!buf) return;
             buf.addPoint(value, timestamp);
-            updateLatestValue(pvName, value, timestamp);
+            //updateLatestValue(pvName, value, timestamp);
+		  
+            const stats = statsRef.current;
+
+            stats.receivedInWindow += 1;
+            stats.latestSequence += 1;
+            stats.latestReceiveTime = performance.now();
+		  
+		 
           },
           onError: (error) => {
             console.error(`Error for ${pvName}:`, error);
@@ -191,96 +234,210 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   // Effect 2: periodic plot redraw
   useEffect(() => {
     let updateCount = 0;
-
-    updateTimerRef.current = setInterval(() => {
+  
+    const updateTimer = setInterval(() => {
       updateCount += 1;
+	    
+      const stats = statsRef.current;
+      const plotUpdateTime = performance.now();
+      
+      stats.plottedInWindow += 1;
+      
+      // Measure the delay from receiving the newest data point
+      // to scheduling it for the next plot update.
+      if (
+        stats.latestSequence !== stats.plottedSequence &&
+        stats.latestReceiveTime !== null
+      ) {
+        stats.latestPlotDelay =
+          plotUpdateTime - stats.latestReceiveTime;
+      
+        stats.plottedSequence = stats.latestSequence;
+      }
 
+
+
+  
       let xMin = null;
       let xMax = null;
-      
-      //recalcualte xMax, xMin when timeSyncEnabled	    
+  
+      // Calculate synchronized X-axis range.
       if (timeSyncEnabled) {
         let latest = null;
+  
         pvNames.forEach((pvName) => {
           const buffer = buffersRef.current[pvName];
-          const ts = buffer ? buffer.getLatestTimestamp() : null;
-          if (ts && (!latest || ts > latest)) latest = ts;
+          const timestamp = buffer
+            ? buffer.getLatestTimestamp()
+            : null;
+  
+          if (timestamp && (!latest || timestamp > latest)) {
+            latest = timestamp;
+          }
         });
-
+  
+        // Follow the latest received PV timestamp.
         xMax = latest || new Date();
-        xMin = new Date(xMax.getTime() - globalTimeWindow * 1000);
+        xMin = new Date(
+          xMax.getTime() - globalTimeWindow * 1000
+        );
       }
-      //Read data from buffer and generated traces
+  
+      // Generate Plotly traces from the current buffers.
       const traces = pvNames.map((pvName) => {
         const buffer = buffersRef.current[pvName];
-        let data = buffer ? buffer.getData() : { x: [], y: [] };
-
-        if (timeSyncEnabled && xMin && xMax && data.x.length > 0) {
-          const idxs = [];
-          data.x.forEach((t, i) => {
-            if (t >= xMin && t <= xMax) idxs.push(i);
-          });
-	  //two new arrays containing only the in-window points still paired
-          data = { x: idxs.map((i) => data.x[i]), y: idxs.map((i) => data.y[i]) };
+  
+        let data = buffer
+          ? buffer.getData()
+          : { x: [], y: [] };
+  
+        // Keep only points inside the selected time window.
+        if (
+          timeSyncEnabled &&
+          xMin &&
+          xMax &&
+          data.x.length > 0
+        ) {
+          const filteredX = [];
+          const filteredY = [];
+  
+          for (let index = 0; index < data.x.length; index += 1) {
+            const timestamp = data.x[index];
+  
+            if (timestamp >= xMin && timestamp <= xMax) {
+              filteredX.push(timestamp);
+              filteredY.push(data.y[index]);
+            }
+          }
+  
+          data = {
+            x: filteredX,
+            y: filteredY,
+          };
         }
-
+  
         return {
           x: data.x,
           y: data.y,
-          type: "scatter",
-          mode: "lines+markers",
+          type: "scattergl",
+          mode: "lines",
           name: pvName,
-          line: { width: 2, color: getTraceColor(pvName) },
-          marker: { size: 4 },
+          line: {
+            width: 2,
+            color: getTraceColor(pvName),
+          },
         };
       });
-      //collect every y-value (PV value) from all traces into one flat array,
-      //comput the overall min/max across all PVs for Y axis scaling
-      let allValues = [];
-      traces.forEach((trace) => {
-        allValues = allValues.concat(trace.y);
-      });
-      
-      if (allValues.length > 0) {
-        const min = Math.min(...allValues);
-        const max = Math.max(...allValues);
-        const range = max - min;
-        const padding = range * 0.2 || 0.0001;
-        setYAxisRange([min - padding * 0.8, max + padding * 3.0]);
+  
+      /*
+       * Recalculate the Y-axis on the first update and then once
+       * every 10 updates, rather than on every redraw.
+       */
+      if (updateCount === 1 || updateCount % 10 === 0) {
+        const allValues = traces.flatMap((trace) => trace.y);
+  
+        if (allValues.length > 0) {
+          const min = Math.min(...allValues);
+          const max = Math.max(...allValues);
+          const range = max - min;
+          const padding = range * 0.2 || 0.0001;
+  
+          setYAxisRange([
+            min - padding * 0.8,
+            max + padding * 3.0,
+          ]);
+        }
       }
-
+  
       if (timeSyncEnabled && xMin && xMax) {
         setXAxisRange([xMin, xMax]);
       } else {
         setXAxisRange(null);
       }
-      //every 10th update, log the total number of buffered poits across all PVs for debugging
-      if (updateCount % 10 === 0) {
-        const totalPoints = pvNames.reduce((sum, pvName) => {
-          const buffer = buffersRef.current[pvName];
-          return sum + (buffer ? buffer.getPointCount() : 0);
-        }, 0);
+  
+      /*
+       * Debug logging once every 100 updates.
+       * With a 100 ms interval, this is approximately once every
+       * 10 seconds for each plot.
+       */
+      if (updateCount % 100 === 0) {
+        const totalPoints = pvNames.reduce(
+          (sum, pvName) => {
+            const buffer = buffersRef.current[pvName];
+  
+            return (
+              sum +
+              (buffer ? buffer.getPointCount() : 0)
+            );
+          },
+          0
+        );
+  
         console.log(
-          `Plot update #${updateCount}: ${totalPoints} total points across ${pvNames.length} PV(s)`
+          `Plot update #${updateCount}: ` +
+          `${totalPoints} total points across ` +
+          `${pvNames.length} PV(s)`
         );
       }
-
+  
       setPlotData(traces);
-      // Bump revision so Plotly's `datarevision` changes, forcing a redraw
-      // (prevents Plotly from skipping the update when it thinks the data is unchanged).
-      setRevision((prev) => prev + 1);  //
-    }, PLOT_CONFIG.UPDATE_INTERVAL);
+  
+      // Force Plotly to recognize the data update.
+      setRevision((previousRevision) => previousRevision + 1);
 
-    console.log(`Plot update timer started (${PLOT_CONFIG.UPDATE_INTERVAL}ms)`);
-
-    return () => {
-      if (updateTimerRef.current) {
-        clearInterval(updateTimerRef.current);
-        console.log("Plot update timer stopped");
+      const statsElapsed =
+        plotUpdateTime - stats.windowStart;
+      
+      if (statsElapsed >= 2000) {
+        const elapsedSeconds = statsElapsed / 1000;
+      
+        const totalPoints = pvNames.reduce(
+          (sum, pvName) => {
+            const buffer = buffersRef.current[pvName];
+      
+            return sum + (buffer ? buffer.getPointCount() : 0);
+          },
+          0
+        );
+      
+        setLiveStats({
+          dataRate:
+            stats.receivedInWindow / elapsedSeconds,
+          plotRate:
+            stats.plottedInWindow / elapsedSeconds,
+          plotDelay: stats.latestPlotDelay,
+          totalPoints,
+        });
+      
+        stats.windowStart = plotUpdateTime;
+        stats.receivedInWindow = 0;
+        stats.plottedInWindow = 0;
       }
+
+
+
+
+    }, PLOT_CONFIG.UPDATE_INTERVAL);
+  
+    updateTimerRef.current = updateTimer;
+  
+    console.log(
+      `Plot update timer started ` +
+      `(${PLOT_CONFIG.UPDATE_INTERVAL}ms)`
+    );
+  
+    return () => {
+      clearInterval(updateTimer);
+  
+      if (updateTimerRef.current === updateTimer) {
+        updateTimerRef.current = null;
+      }
+  
+      console.log("Plot update timer stopped");
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pvNames, timeSyncEnabled, globalTimeWindow]);
+
+
 
   // Returns a connection-status icon based on the status string.
   // Note: currently unused in the UI because SHOW_PV_TAGS is false (PV tags are hidden).
@@ -321,6 +478,29 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   return (
     <div className="plot-widget">
       <div className="plot-header">
+
+	<div className="live-stats">
+          <span title="Incoming WebSocket messages per second">
+            Data: {liveStats.dataRate.toFixed(1)} Hz
+          </span>
+        
+          <span title="Plot update operations per second">
+            Plot: {liveStats.plotRate.toFixed(1)} Hz
+          </span>
+        
+          <span title="Delay from data receipt to the next plot update">
+            Delay:{" "}
+            {liveStats.plotDelay === null
+              ? "---"
+              : `${liveStats.plotDelay.toFixed(0)} ms`}
+          </span>
+        
+          <span title="Total points currently buffered by this plot">
+            Points: {liveStats.totalPoints}
+          </span>
+        </div>
+
+
         <div className="pv-tags">
           {SHOW_PV_TAGS &&
             pvNames.map((pvName) => (
