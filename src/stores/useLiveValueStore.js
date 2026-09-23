@@ -8,8 +8,35 @@ export const useLiveValueStore = create((set) => ({
     set((state) => ({
       latestValues: {
         ...state.latestValues,
-        [pvName]: { value, timestamp },
+        [pvName]: {
+          value,
+          timestamp,
+        },
       },
     }));
+  },
+
+  removeLatestValue: (pvName) => {
+    set((state) => {
+      if (!(pvName in state.latestValues)) {
+        return state;
+      }
+
+      const nextValues = {
+        ...state.latestValues,
+      };
+
+      delete nextValues[pvName];
+
+      return {
+        latestValues: nextValues,
+      };
+    });
+  },
+
+  clearLatestValues: () => {
+    set({
+      latestValues: {},
+    });
   },
 }));

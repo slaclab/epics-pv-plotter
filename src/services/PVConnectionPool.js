@@ -3,41 +3,50 @@ import { useLiveValueStore } from "../stores/useLiveValueStore";
 
 class PVConnectionPool {
   constructor() {
+    // pvName -> { ws: PVWebSocket, subscribers: Set<Subscriber> }
     this.pool = new Map();
   }
 
-  subscribe(pvName, callbacks) {
+  subscribe(pvName, callbacks = {}) {
     let entry = this.pool.get(pvName);
 
     if (!entry) {
-      console.log(`[POOL] creating new connection for ${pvName}`);
+      console.log(
+        `[POOL] creating new connection for ${pvName}`
+      );
 
       const subscribers = new Set();
 
       const ws = new PVWebSocket(
         pvName,
 
-        // Received PV data
+        // Update the latest-value store once per WebSocket message,
+        // then distribute the same sample to every subscriber.
         (value, timestamp) => {
-          // each  WebSocket message only update once  sidebar store
           useLiveValueStore
             .getState()
-            .updateLatestValue(pvName, value, timestamp);
+            .updateLatestValue(
+              pvName,
+              value,
+              timestamp
+            );
 
-          // distribute to all the Plot buffer used this PV
           subscribers.forEach((subscriber) => {
-            subscriber.onData?.(value, timestamp);
+            subscriber.onData?.(
+              value,
+              timestamp
+            );
           });
         },
 
-        // Connection error
+        // Distribute connection errors to all subscribers.
         (error) => {
           subscribers.forEach((subscriber) => {
             subscriber.onError?.(error);
           });
         },
 
-        // Connected
+        // Notify all subscribers when the shared connection opens.
         () => {
           subscribers.forEach((subscriber) => {
             subscriber.onConnect?.();
@@ -47,10 +56,16 @@ class PVConnectionPool {
 
       ws.connect();
 
-      entry = { ws, subscribers };
+      entry = {
+        ws,
+        subscribers,
+      };
+
       this.pool.set(pvName, entry);
     } else {
-      console.log(`[POOL] reusing connection for ${pvName}`);
+      console.log(
+        `[POOL] reusing connection for ${pvName}`
+      );
     }
 
     const subscriber = {
@@ -62,19 +77,37 @@ class PVConnectionPool {
     entry.subscribers.add(subscriber);
 
     console.log(
-      `[POOL] ${pvName} subscribers=${entry.subscribers.size}, ` +
-      `activeConns=${this.pool.size}`
+      `[POOL] ${pvName} ` +
+        `subscribers=${entry.subscribers.size}, ` +
+        `activeConns=${this.pool.size}`
     );
 
     return () => {
       const currentEntry = this.pool.get(pvName);
-      if (!currentEntry) return;
+
+      if (!currentEntry) {
+        return;
+      }
 
       currentEntry.subscribers.delete(subscriber);
+
+      console.log(
+        `[POOL] ${pvName} unsubscribed, ` +
+          `subscribers=${currentEntry.subscribers.size}`
+      );
 
       if (currentEntry.subscribers.size === 0) {
         currentEntry.ws.disconnect();
         this.pool.delete(pvName);
+
+        useLiveValueStore
+          .getState()
+          .removeLatestValue(pvName);
+
+        console.log(
+          `[POOL] closed connection for ${pvName}, ` +
+            `activeConns=${this.pool.size}`
+        );
       }
     };
   }
@@ -84,4 +117,5 @@ class PVConnectionPool {
   }
 }
 
-export const pvConnectionPool = new PVConnectionPool();
+export const pvConnectionPool =
+  new PVConnectionPool();

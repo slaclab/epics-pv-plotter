@@ -2,13 +2,18 @@
 import { useState, useEffect } from 'react';
 import { usePlotStore } from './stores/usePlotStore';
 import { useLiveValueStore } from "./stores/useLiveValueStore";
+import { pvConnectionPool } from "./services/PVConnectionPool";
+
 import PlotGrid from './components/PlotGrid';
-import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X } from 'lucide-react';
 import './App.css';
 
 
-
-function LivePVValue({ pvName }) {
+function LivePVValue({
+  pvName,
+  canRemove,
+  onRemove,
+}) {
   const valueInfo = useLiveValueStore(
     (state) => state.latestValues[pvName]
   );
@@ -32,8 +37,45 @@ function LivePVValue({ pvName }) {
           ).toLocaleTimeString()}
         </div>
       )}
+
+      {canRemove && (
+        <button
+          type="button"
+          className="live-pv-remove"
+          onClick={() => onRemove(pvName)}
+          title="Remove from the Live PV Values list"
+        >
+          <X size={14} />
+        </button>
+      )}
     </div>
   );
+}
+
+
+function LivePVSubscription({ pvName }) {
+  useEffect(() => {
+    const unsubscribe = pvConnectionPool.subscribe(pvName, {
+      // The connection pool updates useLiveValueStore once
+      // for every WebSocket message.
+      onData: () => {},
+
+      onConnect: () => {
+        console.log(`[LIVE LIST] Connected: ${pvName}`);
+      },
+
+      onError: (error) => {
+        console.error(
+          `[LIVE LIST] Error for ${pvName}:`,
+          error
+        );
+      },
+    });
+
+    return unsubscribe;
+  }, [pvName]);
+
+  return null;
 }
 
 
@@ -73,62 +115,111 @@ function App() {
   const setTimeWindow = usePlotStore(
     (state) => state.setTimeWindow
   );
-  //const { 
-  //  plots, 
-  //  addPlot, 
-  //  clearAll,
-  //  timeSyncEnabled,
-  //  globalTimeWindow,
-  //  toggleTimeSync,
-  //  setTimeWindow,
-  //  latestValues
-  //} = usePlotStore();
+
+  const livePVNames = usePlotStore(
+    (state) => state.livePVNames 
+  );
+
+  const addLivePVs = usePlotStore(
+    (state) => state.addLivePVs
+  );
+
+  const removeLivePV = usePlotStore(
+    (state) => state.removeLivePV
+  );
+
+
+
 
   useEffect(() => {
     if (plots.length > 0) {
-      console.log(`✅ Restored ${plots.length} plot(s) from previous session`);
+      console.log(`✅ Active plots: ${plots.length} `);
     }
   }, [plots.length]);
 
+  const parsePVNames = (input) =>
+    input
+      .trim()
+      .split(",")
+      .map((pvName) => pvName.trim())
+      .filter(Boolean);
+
+
+  //function to handle adding Plots and  PV latest values
   const handleAddPlot = () => {
-    const trimmedInput = pvInput.trim();
-    
-    if (!trimmedInput) {
-      alert('Please enter a PV name');
-      return;
-    }
-
-    const pvNames = trimmedInput
-      .split(',')
-      .map(pv => pv.trim())
-      .filter(pv => pv.length > 0);
-
+    const pvNames = parsePVNames(pvInput);
+  
     if (pvNames.length === 0) {
-      alert('Please enter valid PV name(s)');
+      alert("Please enter valid PV name(s)");
       return;
     }
+  
     const option =
-      plotsize_options.find((o) => o.value === selectedPlotSize) ?? plotsize_options[0];
-
-    addPlot(pvNames, option.width, option.height);
-    setPvInput('');
+      plotsize_options.find(
+        (item) => item.value === selectedPlotSize
+      ) ?? plotsize_options[0];
+  
+    addPlot(
+      pvNames,
+      option.width,
+      option.height
+    );
+  
+    setPvInput("");
+  };	
+  	
+  const handleAddLivePV = () => {
+    const pvNames = parsePVNames(pvInput);
+  
+    if (pvNames.length === 0) {
+      alert("Please enter valid PV name(s)");
+      return;
+    }
+  
+    addLivePVs(pvNames);
+    setPvInput("");
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
       handleAddPlot();
     }
   };
 
+
   const handleClearAll = () => {
-    if (plots.length === 0) return;
-    
-    if (window.confirm('Are you sure you want to clear all plots?')) {
+    if (
+      plots.length === 0 &&
+      livePVNames.length === 0
+    ) {
+      return;
+    }
+  
+    if (
+      window.confirm(
+        "Are you sure you want to clear all plots and live PVs?"
+      )
+    ) {
       clearAll();
-      localStorage.removeItem('epics-plot-storage');
-      console.log('🗑️ All plots and storage cleared');
+  
+      console.log(
+        "All plots and live PVs cleared"
+      );
     }
   };
+
+  const plotPVNames = plots.flatMap(
+    (plot) => plot.pvNames
+  );
+
+  const displayedPVNames = Array.from(
+    new Set([
+      ...plotPVNames,
+      ...livePVNames,
+    ])
+  );
+
+
 
   return (
     <div className="app">
@@ -143,6 +234,14 @@ function App() {
         </div>
       </header>
       */}
+      {livePVNames.map((pvName) => (
+        <LivePVSubscription
+          key={`live-subscription-${pvName}`}
+          pvName={pvName}
+        />
+      ))}
+
+
       <div className="control-panel">
         <div className="input-group">
           <input
@@ -151,7 +250,7 @@ function App() {
             placeholder="Enter PV name (e.g., IOC:ai1 or IOC:ai1,IOC:ai2 for multi-PV plot)"
             value={pvInput}
             onChange={(e) => setPvInput(e.target.value)}
-            onKeyPress={handleKeyPress}
+	    onKeyDown={handleKeyDown}
           />
 	<select className="plot-size-select" value={selectedPlotSize} onChange={handlePlotSizeChange}>
            <option value="" disabled>-- Choose an option --</option>
@@ -171,10 +270,18 @@ function App() {
             <Plus size={18} />
             Add Plot
           </button>
+	  <button
+	    className="btn btn-secondary"
+	    onClick={handleAddLivePV}
+	    disabled={!pvInput.trim()}
+	  >
+	    <Activity size={18} />
+	    Add Live PV
+	  </button>
           <button
             className="btn btn-danger"
             onClick={handleClearAll}
-            disabled={plots.length === 0}
+            disabled={plots.length === 0 && livePVNames.length === 0}
           >
             <Trash2 size={18} />
             Clear All
@@ -232,7 +339,7 @@ function App() {
             <div className="info-item">
               <div className="info-label">Monitored PVs</div>
               <div className="info-value">
-                {plots.reduce((sum, plot) => sum + plot.pvNames.length, 0)}
+		{displayedPVNames.length}
               </div>
             </div>
           </div>
@@ -254,38 +361,26 @@ function App() {
 
 
 
+
         <div className="right-sidebar">
           <div className="sidebar-header">
-            Live PV Values ({plots.reduce((sum, p) => sum + p.pvNames.length, 0)})
+            Live PV Values ({displayedPVNames.length})
           </div>
-
+        
           <div className="sidebar-content">
-	    {[...new Set(plots.flatMap((plot) => plot.pvNames))].map(
-  		(pvName) => (
-    		<LivePVValue key={pvName} pvName={pvName} />
-  		)
-	    )}
-	    {/*
-            {[...new Set(plots.flatMap(plot => plot.pvNames))].map(pvName => {
-              const val = latestValues?.[pvName];
-              return (
-                <div key={pvName} className="value-item">
-                  <div className="pv-name">{pvName}</div>
-                  <div className="pv-value">
-                    {val ? Number(val.value).toFixed(5) : '---'}
-                  </div>
-                  {val && (
-                    <div className="pv-time">
-                      {new Date(val.timestamp*1000).toLocaleTimeString()}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-	    */}
+            {displayedPVNames.map((pvName) => (
+              <LivePVValue
+                key={pvName}
+                pvName={pvName}
+                canRemove={livePVNames.includes(pvName)}
+                onRemove={removeLivePV}
+              />
+            ))}
           </div>
-
         </div>
+
+
+
       </div>
     </div>
 

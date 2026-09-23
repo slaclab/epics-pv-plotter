@@ -14,6 +14,9 @@ export const usePlotStore = create(
   persist(
     (set, get) => ({
       plots: [],
+      
+      //PVs explicitly added to the Live PV Values list	    
+      livePVNames: [],
 
       // Time synchronization settings
       timeSyncEnabled: true,
@@ -80,6 +83,52 @@ export const usePlotStore = create(
           newPlot
         );
       },
+
+      // Add one or more PVs directly to the Live PV Values list.
+      addLivePVs: (pvNames) => {
+        const normalizedNames = Array.from(
+          new Set(
+            (Array.isArray(pvNames) ? pvNames : [pvNames])
+              .map((pvName) => pvName.trim())
+              .filter(Boolean)
+          )
+        );
+      
+        if (normalizedNames.length === 0) {
+          return;
+        }
+      
+        const currentNames = get().livePVNames;
+      
+        const nextNames = Array.from(
+          new Set([...currentNames, ...normalizedNames])
+        );
+      
+        if (nextNames.length === currentNames.length) {
+          return;
+        }
+      
+        set({
+          livePVNames: nextNames,
+        });
+      },
+      
+      // Remove a PV from the explicit Live PV Values list.
+      removeLivePV: (pvName) => {
+        const currentNames = get().livePVNames;
+      
+        if (!currentNames.includes(pvName)) {
+          return;
+        }
+      
+        set({
+          livePVNames: currentNames.filter(
+            (name) => name !== pvName
+          ),
+        });
+      },
+
+
 
       // Remove an entire plot
       removePlot: (plotId) => {
@@ -206,17 +255,23 @@ export const usePlotStore = create(
 
       // Remove all plots
       clearAll: () => {
-        if (get().plots.length === 0) {
+	const state = get();
+	      
+        if (
+	  state.plots.length === 0 &&
+          state.livePVNames.length === 0
+	) {
           return;
         }
 
         set({
           plots: [],
+	  livePVNames: [],
         });
 
         nextPlotId = 1;
 
-        console.log("All plots cleared");
+        console.log("All plots and live PVs cleared");
       },
     }),
     {
@@ -259,6 +314,7 @@ export const usePlotStore = create(
       // Persist only configuration data
       partialize: (state) => ({
         plots: state.plots,
+	livePVNames: state.livePVNames,
         timeSyncEnabled: state.timeSyncEnabled,
         globalTimeWindow: state.globalTimeWindow,
       }),

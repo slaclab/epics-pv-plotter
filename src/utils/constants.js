@@ -4,9 +4,14 @@
 // WebSocket Configuration
 // ================================================================
 export const WS_CONFIG = {
-  //  FastAPI  gateway server address
-  BASE_URL: 'ws://192.168.22.4:8000',  // Replace 'xxx' with server IP
-  
+  // FastAPI  gateway server address
+  // BASE_URL: 'ws://192.168.22.4:8000',  // Replace 'xxx' with server IP
+  BASE_URL:
+    import.meta.env.VITE_WS_BASE_URL ||
+    "ws://192.168.22.4:8000",
+
+
+
   // Reconnection settings
   MAX_RECONNECT_ATTEMPTS: 5,      // Maximum number of reconnection attempts
   RECONNECT_DELAY: 3000,          // Delay between reconnection attempts (milliseconds)
