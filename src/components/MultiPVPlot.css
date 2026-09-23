@@ -187,3 +187,37 @@
   font-weight: 400;
   margin-left: 0.25rem;
 }
+
+
+.live-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  color: #475569;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.live-stats span {
+  display: inline-block;
+}
+
+.live-stats span:nth-child(1) {
+  color: #2563eb;
+}
+
+.live-stats span:nth-child(2) {
+  color: #16a34a;
+}
+
+.live-stats span:nth-child(3) {
+  color: #d97706;
+}
+
+.live-stats span:nth-child(4) {
+  color: #64748b;
+}
+
+

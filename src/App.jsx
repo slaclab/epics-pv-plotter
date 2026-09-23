@@ -1,9 +1,41 @@
 // src/App.jsx
 import { useState, useEffect } from 'react';
 import { usePlotStore } from './stores/usePlotStore';
+import { useLiveValueStore } from "./stores/useLiveValueStore";
 import PlotGrid from './components/PlotGrid';
 import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import './App.css';
+
+
+
+function LivePVValue({ pvName }) {
+  const valueInfo = useLiveValueStore(
+    (state) => state.latestValues[pvName]
+  );
+
+  const numericValue = Number(valueInfo?.value);
+
+  return (
+    <div className="value-item">
+      <div className="pv-name">{pvName}</div>
+
+      <div className="pv-value">
+        {valueInfo && Number.isFinite(numericValue)
+          ? numericValue.toFixed(5)
+          : "---"}
+      </div>
+
+      {valueInfo && (
+        <div className="pv-time">
+          {new Date(
+            valueInfo.timestamp * 1000
+          ).toLocaleTimeString()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function App() {
   const [pvInput, setPvInput] = useState('');
@@ -20,16 +52,37 @@ function App() {
   const handlePlotSizeChange = (event) => {
     setSelectedPlotSize(event.target.value);
   };
-  const { 
-    plots, 
-    addPlot, 
-    clearAll,
-    timeSyncEnabled,
-    globalTimeWindow,
-    toggleTimeSync,
-    setTimeWindow,
-    latestValues
-  } = usePlotStore();
+
+
+  const plots = usePlotStore((state) => state.plots);
+  const addPlot = usePlotStore((state) => state.addPlot);
+  const clearAll = usePlotStore((state) => state.clearAll);
+  
+  const timeSyncEnabled = usePlotStore(
+    (state) => state.timeSyncEnabled
+  );
+  
+  const globalTimeWindow = usePlotStore(
+    (state) => state.globalTimeWindow
+  );
+  
+  const toggleTimeSync = usePlotStore(
+    (state) => state.toggleTimeSync
+  );
+  
+  const setTimeWindow = usePlotStore(
+    (state) => state.setTimeWindow
+  );
+  //const { 
+  //  plots, 
+  //  addPlot, 
+  //  clearAll,
+  //  timeSyncEnabled,
+  //  globalTimeWindow,
+  //  toggleTimeSync,
+  //  setTimeWindow,
+  //  latestValues
+  //} = usePlotStore();
 
   useEffect(() => {
     if (plots.length > 0) {
@@ -207,6 +260,12 @@ function App() {
           </div>
 
           <div className="sidebar-content">
+	    {[...new Set(plots.flatMap((plot) => plot.pvNames))].map(
+  		(pvName) => (
+    		<LivePVValue key={pvName} pvName={pvName} />
+  		)
+	    )}
+	    {/*
             {[...new Set(plots.flatMap(plot => plot.pvNames))].map(pvName => {
               const val = latestValues?.[pvName];
               return (
@@ -223,6 +282,7 @@ function App() {
                 </div>
               );
             })}
+	    */}
           </div>
 
         </div>
