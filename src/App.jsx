@@ -22,12 +22,16 @@ function LivePVValue({
 
   return (
     <div className="value-item">
-      <div className="pv-name">{pvName}</div>
+      <div className="pv-name">
+        <div className="pv-name-scroll-container">
+        {pvName}
+        </div>
+        </div>
 
-      <div className="pv-value">
+      <div className="pv-value">        
         {valueInfo && Number.isFinite(numericValue)
           ? numericValue.toFixed(5)
-          : "---"}
+          : "---"}                
       </div>
 
       {valueInfo && (
@@ -267,7 +271,7 @@ function App() {
             onClick={handleAddPlot}
             disabled={!pvInput.trim()}
           >
-            <Plus size={18} />
+            <Activity size={18} />
             Add Plot
           </button>
 	  <button
@@ -275,7 +279,7 @@ function App() {
 	    onClick={handleAddLivePV}
 	    disabled={!pvInput.trim()}
 	  >
-	    <Activity size={18} />
+	    <Plus size={18} />
 	    Add Live PV
 	  </button>
           <button

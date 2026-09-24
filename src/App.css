@@ -402,16 +402,44 @@ html, body {
   background: #f8f9fa;
   border-radius: 6px;
   border: 1px solid #eee;
+  
+  overflow: hidden;  
 }
 
-.right-sidebar .pv-name {
+
+.right-sidebar {
   font-family: 'Courier New', monospace;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   color: #555;
 }
 
+.pv-name {
+  font-family: 'Courier New', monospace;
+  font-size: 1.3rem;
+  color: #555;
+  display: inline-block;
+  animation: scroll-left 10s linear infinite;
+}
+
+.pv-name-scroll-container
+{  
+  width: 100%;
+  box-sizing: border-box;  
+}
+
+@keyframes scroll-left
+{
+  0% {transform: translateX(0%);}
+  100% {transform: translateX(-50%);}
+}
+
+
+
+
+
+
 .right-sidebar .pv-value {
-  font-size: 1.5rem;
+  font-size: 3rem;
   font-weight: 700;
   color: #1f77b4;
   margin: 0.3rem 0;
