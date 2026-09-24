@@ -13,6 +13,27 @@ import "./MultiPVPlot.css";
 export default function MultiPVPlot({ plotId, pvNames }) {
   const SHOW_PV_TAGS = false;
 
+  const [inputValue, setInputValue] = useState('');
+  const [displayText, setDisplayText] = useState('');
+  
+  const handleSubmit = () => {
+    if (inputValue.trim() === '') return;
+    setDisplayText(inputValue);
+    setInputValue(''); //Empty input box
+    console.log('entered the value', inputValue);
+  };	  
+
+  const handleClear = () => {
+    setDisplayText('');
+    setInputValue('');
+    console.log('cleared the value');
+  };
+  const handleKeyDown = (e) =>{
+    if (e.key === 'Enter'){
+	    handleSubmit();
+    }
+  };
+  
   const [plotData, setPlotData] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState({});
   const [yAxisRange, setYAxisRange] = useState(null);
@@ -461,10 +482,14 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     margin: { l: 85, r: 30, t: 10, b: 50 },
   };
 
+  //
+
+
+
   return (
     <div className="plot-widget">
       <div className="plot-header">
-
+	{/*
 	<div className="live-stats">
           <span title="Incoming WebSocket messages per second">
             Data: {liveStats.dataRate.toFixed(1)} Hz
@@ -485,6 +510,18 @@ export default function MultiPVPlot({ plotId, pvNames }) {
             Points: {liveStats.totalPoints}
           </span>
         </div>
+        */}
+        <div className="user-input">
+	  {displayText ? displayText: <span style={{ color:'#999'}}> </span>}
+	  <input   
+            type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+	      placeholder=''
+	  />
+          <button className="enter-button" onClick={handleSubmit}>Enter</button>
+	  <button className="clear-button" onClick={handleClear}>Clear</button>
+	</div>  
+       
 
 
         <div className="pv-tags">

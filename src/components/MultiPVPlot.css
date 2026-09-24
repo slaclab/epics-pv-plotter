@@ -220,4 +220,57 @@
   color: #64748b;
 }
 
+.user-input {
+  #width: 80px;
+  height: 15px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  gap: 12px;
+}
+
+.display-text {
+  color: #333;
+  font-size: 18px;
+  min-width: 200px;
+}
+
+.user-input input {
+  width: 100px;
+  height: 35px;
+
+  padding: 0 12px;
+  box-sizing: border-box;
+
+  border: 1px solid #ccc;
+  border-radius: 6px;
+
+  font-size: 16px;
+  outline: none;
+}
+
+.user-input input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+}
+
+.user-input button {
+  width: 75px;
+  height: 35px;
+
+  border: none;
+  border-radius: 6px;
+
+  background-color: #87CEEB;
+  color: white;
+
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.user-input button:hover {
+  background-color: #4338ca;
+}
 
