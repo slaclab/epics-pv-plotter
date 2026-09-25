@@ -338,7 +338,8 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           return {
             x: data.x,
             y: data.y,
-            type: "scattergl",
+	    type: "scatter",
+	    //type: "scattergl",
             mode: "lines",
             name: pvName,
             line: {
