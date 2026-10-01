@@ -5,11 +5,11 @@
 // ================================================================
 export const WS_CONFIG = {
   // FastAPI  gateway server address
-  // BASE_URL: 'ws://192.168.22.4:8000',  // Replace 'xxx' with server IP
-  BASE_URL:
-    import.meta.env.VITE_WS_BASE_URL ||
-    "ws://192.168.22.4:8000",
-
+  // BASE_URL:
+  //  import.meta.env.VITE_WS_BASE_URL ||
+  //  "ws://192.168.22.4:8000",
+  // Change into the local hostname
+  BASE_URL: `ws://${window.location.hostname}:8000`,
 
 
   // Reconnection settings
