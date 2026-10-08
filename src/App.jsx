@@ -290,7 +290,7 @@ function App() {
             <Trash2 size={18} />
             Clear All
           </button>
-          
+          {/* 
           <button
             className="btn btn-info"
             onClick={() => setShowInfo(!showInfo)}
@@ -299,11 +299,12 @@ function App() {
             {showInfo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             Info Details
           </button>
-
+	  */}
           {/* Vertical Separator */}
           <div className="separator"></div>
 
           {/* Time Synchronization Controls - Now Inline */}
+	  {/*
           <button
             className={`btn ${timeSyncEnabled ? 'btn-success' : 'btn-secondary'}`}
             onClick={toggleTimeSync}
@@ -312,7 +313,7 @@ function App() {
             <Clock size={18} />
             {timeSyncEnabled ? 'Time Sync: ON' : 'Time Sync: OFF'}
           </button>
-          
+          */}
           {timeSyncEnabled && (
             <>
               <label className="time-window-label">Time Window:</label>

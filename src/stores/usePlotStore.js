@@ -315,7 +315,7 @@ export const usePlotStore = create(
       partialize: (state) => ({
         plots: state.plots,
 	livePVNames: state.livePVNames,
-        timeSyncEnabled: state.timeSyncEnabled,
+        //timeSyncEnabled: state.timeSyncEnabled,
         globalTimeWindow: state.globalTimeWindow,
       }),
     }
