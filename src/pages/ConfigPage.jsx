@@ -58,7 +58,7 @@ function ConfigPage() {
         for (const [pvName, value] of Object.entries(data || {})) {
           asStrings[pvName] = String(value);
         }
-        setThresholds(asStrings);
+        setThresholds((prev) => ({ ...asStrings, ...prev }));
       })
       .catch((err) => console.error("Failed to load thresholds:", err));
 
