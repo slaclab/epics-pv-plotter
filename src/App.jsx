@@ -13,6 +13,7 @@ import { API_BASE } from "./utils/constants";
 
 function LivePVValue({
   pvName,
+  threshold,
   canRemove,
   onRemove,
 }) {
@@ -22,8 +23,17 @@ function LivePVValue({
 
   const numericValue = Number(valueInfo?.value);
 
+  const aboveThreshold =
+    valueInfo != null &&
+    Number.isFinite(numericValue) &&
+    typeof threshold === "number" &&
+    numericValue > threshold;
+
   return (
-    <div className="value-item">
+    <div
+      className={`value-item${aboveThreshold ? " value-item-alarm" : ""}`}
+      title={aboveThreshold ? `Above threshold (${threshold})` : undefined}
+    >
       <div className="pv-name">
         <div className="pv-name-scroll-container">
         {pvName}
@@ -138,6 +148,20 @@ function App() {
   );
 
   const navigate = useNavigate();
+
+  // Per-PV thresholds; App remounts when returning from /config,
+  // so this always reflects the latest saved values
+  const [thresholds, setThresholds] = useState({});
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/thresholds`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => setThresholds(data || {}))
+      .catch((err) => console.error("Failed to load thresholds:", err));
+  }, []);
 
   const handleDirectToConfig = () => {
     navigate('/config');
@@ -425,6 +449,7 @@ function App() {
               <LivePVValue
                 key={pvName}
                 pvName={pvName}
+                threshold={thresholds[pvName]}
                 canRemove={livePVNames.includes(pvName)}
                 onRemove={removeLivePV}
               />
