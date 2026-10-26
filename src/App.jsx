@@ -6,7 +6,7 @@ import { useLiveValueStore } from "./stores/useLiveValueStore";
 import { pvConnectionPool } from "./services/PVConnectionPool";
 
 import PlotGrid from './components/PlotGrid';
-import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X, Pause, Play } from 'lucide-react';
 import './App.css';
 import { API_BASE } from "./utils/constants";
 // Relative path: nginx proxies /api to the backend on the same origin.
@@ -135,8 +135,16 @@ function App() {
     (state) => state.setTimeWindow
   );
 
+  const plotsPaused = usePlotStore(
+    (state) => state.plotsPaused
+  );
+
+  const togglePlotsPaused = usePlotStore(
+    (state) => state.togglePlotsPaused
+  );
+
   const livePVNames = usePlotStore(
-    (state) => state.livePVNames 
+    (state) => state.livePVNames
   );
 
   const addLivePVs = usePlotStore(
@@ -360,6 +368,16 @@ function App() {
 	  */}
           {/* Vertical Separator */}
           <div className="separator"></div>
+
+          {/* Pause/resume plot redraws; data keeps buffering while paused */}
+          <button
+            className={`btn ${plotsPaused ? 'btn-success' : 'btn-secondary'}`}
+            onClick={togglePlotsPaused}
+            title={plotsPaused ? 'Resume live plot updates' : 'Freeze all plots for analysis'}
+          >
+            {plotsPaused ? <Play size={18} /> : <Pause size={18} />}
+            {plotsPaused ? 'Resume Plots' : 'Pause Plots'}
+          </button>
 
           {/* Time Synchronization Controls - Now Inline */}
 	  {/*
