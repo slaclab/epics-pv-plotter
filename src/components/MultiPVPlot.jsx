@@ -447,7 +447,8 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         {
           ...axisStyle,
           label: yAxisTitle,
-          size: 75,
+          font: `16px ${PLOT_THEME.fontFamily}`, // Y tick label size
+          size: 85, // wider axis so the larger tick labels fit
         },
       ],
       series: [
