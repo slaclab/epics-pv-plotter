@@ -35,10 +35,13 @@ function BeamlineLight({ pvName }) {
   const state = toState(valueInfo?.value);
 
   return (
-    <span
-      className={`beamline-light beamline-light-${state}`}
-      title={`${pvName}: ${STATE_LABELS[state]}`}
-    />
+    <span title={`${pvName}: ${STATE_LABELS[state]}`}>
+      <span
+        className={`beamline-light beamline-light-${state}`}
+        aria-hidden="true"
+      />{" "}
+      {STATE_LABELS[state]}
+    </span>
   );
 }
 
