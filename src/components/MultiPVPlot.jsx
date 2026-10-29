@@ -247,9 +247,15 @@ export default function MultiPVPlot({ plotId, pvNames }) {
             buf.addPoint(value, timestamp);
             if (buf.hasBadTimestampFlag() && !badTimestampWarnedRef.current) {
               badTimestampWarnedRef.current = true;
+              // Show the raw seconds alongside a readable date; non-numbers (e.g. missing) as-is.
+              // toISOString() throws on out-of-range Dates, so check validity first.
+              const tsDate = new Date(Number(timestamp) * 1000);
+              const tsLabel = typeof timestamp === "number" && !isNaN(tsDate.getTime())
+                ? `${tsDate.toISOString()} (${timestamp})`
+                : String(timestamp);
               alert(
-                `⚠️ Warning: PV "${pvName}" has an invalid timestamp ` +
-                `(missing, or more than 1 hour away from the current time).\n\n` +
+                `⚠️ Warning: PV "${pvName}" has an invalid timestamp ${tsLabel} ` +
+                `(missing, undefined EPICS time, or more than 1 hour away from the current time).\n\n` +
                 `This usually means the IOC clock is not synchronized. ` +
                 `The plot shows the timestamp exactly as received from the backend.`
               );
