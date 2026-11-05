@@ -279,6 +279,11 @@
 .uplot-host {
   position: relative;
   overflow: hidden;
+  /* Stretch to fill .plot-container so the canvas uses all its space. */
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
 }
 
 .uplot-host .uplot {
@@ -293,12 +298,25 @@
   background: #f8f9fa;
 }
 
-.uplot-host .u-legend {
-  font-size: 14px;
-  text-align: left;
-  padding: 2px 0 0 8px;
+/* Header slot for the uPlot legend (mounted there via legend.mount). */
+.plot-legend {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.uplot-host .u-legend .u-series > * {
+.plot-legend .u-legend {
+  font-size: 18px;
+  text-align: left;
+  margin: 0;
+}
+
+.plot-legend .u-legend .u-series > * {
   padding: 1px 4px;
+}
+
+/* Legend color square; uPlot's default is 1em (same as the font size). */
+.plot-legend .u-legend .u-marker {
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: middle;
 }

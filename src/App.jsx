@@ -489,7 +489,7 @@ function App() {
 	  >
 		PV Configurations
 	  </button>
-	  <div>
+	  <div className="control-save">
 	    <button
 	      className="btn btn-fourth"
 	      onClick={handleSavePlotConfig}

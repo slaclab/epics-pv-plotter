@@ -48,6 +48,11 @@ CA_CONTEXT: Optional[Context] = None
 # Key: "client_ip:client_port:pv_name", Value: caproto subscription object
 active_subscriptions: Dict[str, any] = {}
 
+# Seconds to wait for a PV to connect and return its first reading.
+# caproto's default is 2 s, which is too short for PVs reached through a
+# remote CA gateway (e.g. SPEAR PVs via 134.79.46.44:5100).
+PV_CONNECT_TIMEOUT = float(os.environ.get("PV_CONNECT_TIMEOUT", "10"))
+
 # ================================================================
 # Application Lifecycle Management
 #
@@ -449,12 +454,13 @@ async def websocket_endpoint(
         # ============================================================
         # caproto returns a tuple, we unpack the first element
         epics_pv, = await CA_CONTEXT.get_pvs(pv)
-        
+        await epics_pv.wait_for_connection(timeout=PV_CONNECT_TIMEOUT)
+
         # ============================================================
         # Step 2: Read initial value with timestamp metadata
         # ============================================================
         # data_type='time' includes timestamp, status, and severity
-        initial_reading = await epics_pv.read(data_type='time')
+        initial_reading = await epics_pv.read(data_type='time', timeout=PV_CONNECT_TIMEOUT)
         
         # Construct initial data message
         initial_data = {
