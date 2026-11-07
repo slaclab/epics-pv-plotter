@@ -31,6 +31,41 @@ function ConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState("");
 
+  // Shared settings for "Add Energy" PVs (calculated in routers/energy.py)
+  const [energyConfig, setEnergyConfig] = useState(null);
+  const [energySaveStatus, setEnergySaveStatus] = useState("");
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/energy-config`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => setEnergyConfig(data))
+      .catch((err) => console.error("Failed to load energy config:", err));
+  }, []);
+
+  const handleEnergyConfigChange = (key, value) => {
+    setEnergyConfig((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveEnergyConfig = async () => {
+    try {
+      setEnergySaveStatus("Saving...");
+      const res = await fetch(`${API_BASE}/api/energy-config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(energyConfig),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEnergySaveStatus("Saved! Re-add or reload energy PVs to apply.");
+      setTimeout(() => setEnergySaveStatus(""), 4000);
+    } catch (err) {
+      console.error(err);
+      setEnergySaveStatus("Save failed (PV names must not be empty)");
+    }
+  };
+
   const handleEguChange = (pvName, newEguValue) => {
     setSelectedEgus((prevEgus) => ({
       ...prevEgus,
@@ -425,6 +460,7 @@ function ConfigPage() {
                             <option value="Volts">Volts</option>
                             <option value="mA">mA</option>
                             <option value="Counts">Counts</option>
+                            <option value="eV">eV</option>
                           </select>
                         </div>
                       </td>
@@ -500,6 +536,77 @@ function ConfigPage() {
               </button>
               {saveStatus && (
                 <span style={{ marginLeft: "10px" }}>{saveStatus}</span>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* Energy calculation settings (used by "Add Energy" Live PVs) */}
+      <section style={{ marginTop: "30px", maxWidth: "1100px" }}>
+        <h2>Energy Calculation</h2>
+        <p style={{ color: "#666" }}>
+          E (eV) = 12398.42 / (2 · d · sin θ), with θ from the encoder's REP and
+          its record's resolution field. Shown as the Live PV
+          "&lt;beamline&gt;:MONO_CALC.ENERGY"; entering a PV with "Add Energy"
+          also sets the encoder here.
+        </p>
+        {!energyConfig ? (
+          <p>Energy settings could not be loaded.</p>
+        ) : (
+          <>
+            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <tbody>
+                {[
+                  ["encoder_pv", "Encoder PV (raw counts, e.g. ...MOTOR1.REP)"],
+                  ["d_spacing_pv", "D-spacing PV (Å)"],
+                  ["offset_pv", "Encoder offset PV"],
+                  ["resolution_field", "Encoder resolution field (deg/count)"],
+                ].map(([key, label]) => (
+                  <tr key={key}>
+                    <td style={{ padding: "8px", width: "280px" }}>{label}</td>
+                    <td style={{ padding: "8px" }}>
+                      <input
+                        type="text"
+                        value={energyConfig[key] ?? ""}
+                        onChange={(e) =>
+                          handleEnergyConfigChange(key, e.target.value)
+                        }
+                        style={{ width: "100%", padding: "4px" }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td style={{ padding: "8px" }}>Offset units</td>
+                  <td style={{ padding: "8px" }}>
+                    <select
+                      value={energyConfig.offset_units}
+                      onChange={(e) =>
+                        handleEnergyConfigChange("offset_units", e.target.value)
+                      }
+                      style={{ padding: "4px" }}
+                    >
+                      <option value="counts">
+                        counts: θ = (REP − offset) × resolution
+                      </option>
+                      <option value="deg">
+                        deg: θ = REP × resolution + offset
+                      </option>
+                    </select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{ marginTop: "12px" }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveEnergyConfig}
+              >
+                Save Energy Settings
+              </button>
+              {energySaveStatus && (
+                <span style={{ marginLeft: "10px" }}>{energySaveStatus}</span>
               )}
             </div>
           </>

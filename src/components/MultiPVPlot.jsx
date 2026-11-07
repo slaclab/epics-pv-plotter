@@ -102,6 +102,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   // uPlot draws straight to a canvas, so plot data never goes through React
   // state: the redraw timer pushes new data into the uPlot instance directly.
   const plotContainerRef = useRef(null);
+  const legendRef = useRef(null); // header slot the uPlot legend is mounted into
   const uplotRef = useRef(null);
 
   const [liveStats, setLiveStats] = useState({
@@ -441,21 +442,18 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     };
     const formatXTick = uPlot.fmtDate(PLOT_THEME.xTickFormat);
 
-    // The legend sits below the canvas, so the canvas gets whatever height
-    // the legend leaves over.
-    const getPlotSize = (plot) => {
-      const legend = plot?.root.querySelector(".u-legend");
-      return {
-        width: Math.max(container.clientWidth, 1),
-        height: Math.max(container.clientHeight - (legend?.offsetHeight ?? 0), 1),
-      };
-    };
+    // The legend is mounted in the plot header, so the canvas gets the
+    // whole container.
+    const getPlotSize = () => ({
+      width: Math.max(container.clientWidth, 1),
+      height: Math.max(container.clientHeight, 1),
+    });
     const formatRegular = (value) => String(Number(value.toPrecision(6)));
     const formatValue = (format) => (u, value) =>
       value == null ? "--" : formatPVValue(value, format, formatRegular);
 
     const options = {
-      ...getPlotSize(null),
+      ...getPlotSize(),
       padding: [10, 30, 0, 0],
       scales: {
         x: { time: true },
@@ -493,7 +491,14 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       ],
       // The legend is built by uPlot outside React, so it can't contain React components.
       legend: {
-        markers: { width: 2 },
+        markers: {
+          width: 2,
+          // Fill the marker with the series' own line color so it is a solid square.
+          fill: (u, seriesIdx) => u.series[seriesIdx].stroke?.(u, seriesIdx),
+        },
+        // Put the legend in the plot header (next to "Show PV Names")
+        // instead of below the canvas. uPlot removes it again on destroy.
+        mount: (u, legendEl) => legendRef.current?.appendChild(legendEl),
       },
       cursor: {
         // Drag horizontally to zoom the time axis; double-click to reset.
@@ -516,18 +521,17 @@ export default function MultiPVPlot({ plotId, pvNames }) {
     uplotRef.current = plot;
 
     // Disable legend click-to-hide (matches the old itemclick: false).
-    plot.root.querySelectorAll(".u-legend .u-series").forEach((row) => {
+    legendRef.current?.querySelectorAll(".u-legend .u-series").forEach((row) => {
       row.style.pointerEvents = "none";
     });
-    plot.setSize(getPlotSize(plot));
+    plot.setSize(getPlotSize());
 
-    // Track the container size (react-grid-layout resizes widgets freely),
-    // and the legend's, which grows when hover values make it wrap.
+    // Track the container size (react-grid-layout resizes widgets freely,
+    // and the header grows if the legend wraps onto more lines).
     const resizeObserver = new ResizeObserver(() => {
-      plot.setSize(getPlotSize(plot));
+      plot.setSize(getPlotSize());
     });
     resizeObserver.observe(container);
-    resizeObserver.observe(plot.root.querySelector(".u-legend"));
 
     return () => {
       resizeObserver.disconnect();
@@ -687,6 +691,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
             {showAlias ? "Show PV Names" : "Show Aliases"}
           </button>
         </div>
+
+        {/* uPlot mounts its legend here (see legend.mount) */}
+        <div ref={legendRef} className="plot-legend" />
 
         <div className="pv-tags">
           {SHOW_PV_TAGS &&

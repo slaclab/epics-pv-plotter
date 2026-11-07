@@ -7,10 +7,17 @@ import { pvConnectionPool } from "./services/PVConnectionPool";
 
 import PlotGrid from './components/PlotGrid';
 import BeamlineStatus from './components/BeamlineStatus';
-import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X, Pause, Play, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X, Pause, Play, Eye, EyeOff, Zap } from 'lucide-react';
 import './App.css';
 import { API_BASE } from "./utils/constants";
 import { formatPVValue } from "./utils/valueFormat";
+import {
+  isEnergyPV,
+  toEnergyPVName,
+  normalizeEncoderPV,
+  energyDisplayName,
+  ENERGY_EGU,
+} from "./utils/energy";
 // Relative path: nginx proxies /api to the backend on the same origin.
 
 function LivePVValue({
@@ -25,7 +32,11 @@ function LivePVValue({
     (state) => state.latestValues[pvName]
   );
 
-  const numericValue = Number(valueInfo?.value);
+  // null (e.g. an energy the gateway could not calculate) must show "---",
+  // but Number(null) is 0, so map it to NaN first.
+  const numericValue =
+    valueInfo?.value == null ? NaN : Number(valueInfo.value);
+  const energy = isEnergyPV(pvName);
 
   const upper = threshold?.upper;
   const lower = threshold?.lower;
@@ -54,8 +65,11 @@ function LivePVValue({
 
       <div className="pv-value">        
         {valueInfo && Number.isFinite(numericValue)
-          ? formatPVValue(numericValue, valueFormat, (v) => v.toFixed(5))
-          : "---"}                
+          ? formatPVValue(numericValue, valueFormat, (v) =>
+              v.toFixed(energy ? 2 : 5)
+            )
+          : "---"}
+        {energy && <span className="pv-egu"> {ENERGY_EGU}</span>}
       </div>
 
       {valueInfo && (
@@ -233,8 +247,12 @@ function App() {
   }, []);
 
   // Alias if enabled and available, else the raw PV name
-  const getDisplayName = (pvName) =>
-    showAlias && aliases[pvName] ? aliases[pvName] : pvName;
+  // (energy PVs get a readable "Energy (<encoder>)" label instead)
+  const getDisplayName = (pvName) => {
+    if (!showAlias) return pvName;
+    if (aliases[pvName]) return aliases[pvName];
+    return isEnergyPV(pvName) ? energyDisplayName(pvName) : pvName;
+  };
 
   const handleDirectToConfig = () => {
     navigate('/config');
@@ -313,6 +331,50 @@ function App() {
   
     addLivePVs(pvNames);
     setPvInput("");
+  };
+
+  // Add the "<beamline>:MONO_CALC.ENERGY" Live PV (calculated by the gateway,
+  // see routers/energy.py). An entered PV is saved as the shared encoder in
+  // /api/energy-config; with nothing entered the saved encoder is used.
+  const handleAddEnergy = async () => {
+    const encoderNames = parsePVNames(pvInput);
+    if (encoderNames.length > 1) {
+      alert("Only one energy PV is supported: enter a single encoder PV");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/energy-config`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const energyConfig = await res.json();
+
+      const encoder = encoderNames.length
+        ? normalizeEncoderPV(encoderNames[0])
+        : energyConfig.encoder_pv;
+
+      if (encoder !== energyConfig.encoder_pv) {
+        const save = await fetch(`${API_BASE}/api/energy-config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...energyConfig, encoder_pv: encoder }),
+        });
+        if (!save.ok) throw new Error(`HTTP ${save.status}`);
+      }
+
+      const energyName = toEnergyPVName(encoder);
+      if (livePVNames.includes(energyName)) {
+        // The open stream keeps its old encoder until it reconnects
+        if (encoder !== energyConfig.encoder_pv) {
+          alert(`Encoder set to ${encoder}. Reload the page to apply it to ${energyName}.`);
+        }
+      } else {
+        addLivePVs([energyName]);
+      }
+      setPvInput("");
+    } catch (err) {
+      console.error("Failed to add energy PV:", err);
+      alert(`Could not add energy PV: ${err.message}`);
+    }
   };
 
   const handleKeyDown = (event) => {
@@ -413,6 +475,14 @@ function App() {
 	    <Plus size={18} />
 	    Add Live PV
 	  </button>
+	  <button
+	    className="btn btn-secondary"
+	    onClick={handleAddEnergy}
+	    title="Show the calculated energy (BL22:MONO_CALC.ENERGY). An entered PV is saved as the mono encoder; empty uses the saved encoder."
+	  >
+	    <Zap size={18} />
+	    Add Energy
+	  </button>
           <button
             className="btn btn-danger"
             onClick={handleClearAll}
@@ -489,7 +559,7 @@ function App() {
 	  >
 		PV Configurations
 	  </button>
-	  <div>
+	  <div className="control-save">
 	    <button
 	      className="btn btn-fourth"
 	      onClick={handleSavePlotConfig}
