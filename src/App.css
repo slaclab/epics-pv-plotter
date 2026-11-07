@@ -519,6 +519,12 @@ html, body {
   border-color: #ef4444;
 }
 
+/* Unit after a calculated energy, e.g. "9507.12 eV" */
+.right-sidebar .pv-value .pv-egu {
+  font-size: 1.5rem;
+  font-weight: 400;
+}
+
 .value-item.value-item-alarm .pv-value {
   color: #b91c1c;
   font-weight: bold;

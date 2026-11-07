@@ -25,6 +25,7 @@ import uvicorn
 
 from routers import config as config_router
 from routers import thresholds as thresholds_router
+from routers import energy as energy_router
 from caproto.asyncio.client import Context
 import numpy as np
 
@@ -82,7 +83,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # container is run as the host's own uid to satisfy NFS permissions -
     # see docker-compose.yml).
     CA_CONTEXT = Context(client_name="epics-pv-plotter")
-    
+    # Shared with routers (e.g. routers/energy.py) via websocket.app.state
+    app.state.ca_context = CA_CONTEXT
+
     # Display startup banner
     log.info("╔════════════════════════════════════════════════════════╗")
     log.info("║   EPICS Channel Access WebSocket Gateway (FastAPI)    ║")
@@ -135,6 +138,7 @@ app = FastAPI(
 # Add routers 
 app.include_router(config_router.router)
 app.include_router(thresholds_router.router)
+app.include_router(energy_router.router)
 
 # Enable CORS to allow frontend applications from different origins
 app.add_middleware(

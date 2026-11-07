@@ -2,6 +2,7 @@
 // Manages a single PV WebSocket connection (used by the global PV connection pool).
 
 import { WS_CONFIG } from "../utils/constants";
+import { isEnergyPV, encoderOf } from "../utils/energy";
 
 export class PVWebSocket {
   constructor(pvName, onData, onError, onConnect, onClose) {
@@ -31,7 +32,15 @@ export class PVWebSocket {
 
       // WS_CONFIG.BASE_URL (IP + port) is defined in utils/constants.js
       // encodeURIComponent: safely encode PV name (colons, etc.) into the URL.
-      const wsUrl = `${WS_CONFIG.BASE_URL}/ws?pv=${encodeURIComponent(this.pvName)}`;
+      // Energy PVs are calculated by the gateway from the encoder (routers/energy.py).
+      // No encoder in the URL -> the gateway uses encoder_pv from /api/energy-config.
+      let wsUrl = `${WS_CONFIG.BASE_URL}/ws?pv=${encodeURIComponent(this.pvName)}`;
+      if (isEnergyPV(this.pvName)) {
+        const encoder = encoderOf(this.pvName);
+        wsUrl = encoder
+          ? `${WS_CONFIG.BASE_URL}/ws/energy?encoder=${encodeURIComponent(encoder)}`
+          : `${WS_CONFIG.BASE_URL}/ws/energy`;
+      }
 
       console.log(`🔗 Connecting to: ${wsUrl}`);
       this.ws = new WebSocket(wsUrl);

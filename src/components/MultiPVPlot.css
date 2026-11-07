@@ -221,7 +221,7 @@
 }
 
 .user-input {
-  #width: 80px;
+  /* width: 80px; */
   height: 15px;
 
   display: flex;

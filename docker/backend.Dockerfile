@@ -11,6 +11,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY epics_fastapi_gateway.py ./
+COPY calc ./calc
 COPY routers ./routers
 
 # docker-compose.yml may run this container as an arbitrary host uid (to
