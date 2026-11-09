@@ -298,6 +298,7 @@ async def energy_websocket(
         log.error(f"❌ Energy error for {client_id}: {e}")
         try:
             await websocket.send_json({"error": str(e), "pv": stream_name})
+            await websocket.close(code=1011)
         except Exception:
             pass  # client already gone
 
