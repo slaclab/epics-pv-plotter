@@ -129,7 +129,8 @@ def to_scalar(data):
     """First element of a caproto reading as a float, or None."""
     try:
         flat = np.asarray(data).ravel()
-        return float(flat[0]) if flat.size else None
+        value = float(flat[0]) if flat.size else None
+        return value if value is not None and np.isfinite(value) else None
     except (TypeError, ValueError):
         return None
 
