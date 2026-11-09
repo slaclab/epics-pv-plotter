@@ -155,8 +155,10 @@ def build_message(stream_name, input_names, latest, config):
         message["theta"] = theta
         message["value"] = bragg_energy_ev(theta, values["d_spacing"])
     except EnergyCalcError as e:
-        # value stays None: the frontend shows "---" instead of a wrong number
-        message["detail"] = str(e)
+        # value stays None: the frontend shows "---" instead of a wrong number.
+        # Keep detailed error information in server logs only.
+        log.warning("Energy calculation failed for %s: %s", stream_name, e)
+        message["detail"] = "Energy calculation failed"
     return message
 
 
