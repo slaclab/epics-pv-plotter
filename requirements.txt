@@ -1,6 +1,21 @@
+# Python dependencies for the EPICS WebSocket gateway (epics_fastapi_gateway.py).
+# Install into the backend venv with:
+#   <venv>/bin/pip install -r requirements.txt
+# Sub-dependencies (starlette, anyio, h11, click, pydantic_core, ...) are
+# pulled in automatically by pip.
+
+# Web framework / ASGI server
 fastapi==0.138.0
 uvicorn==0.49.0
-websockets==16.0
-caproto==1.3.0
-numpy==2.3.5
 pydantic==2.12.5
+
+# REQUIRED by uvicorn for the /ws endpoint. Plain `uvicorn` does not include
+# a WebSocket implementation; without this package every WebSocket connection
+# is rejected ("No supported WebSocket library detected") and plots show no data.
+websockets==16.0
+
+# EPICS Channel Access client
+caproto==1.3.0
+
+# Array handling for PV values
+numpy==2.3.5

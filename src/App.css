@@ -61,14 +61,14 @@ html, body {
 
 .control-panel {
   background: white;
-  padding: 1.5rem 2rem;
+  padding: 1rem 1rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   width: 100%;
   flex-shrink: 0;
 }
 
 .control-panel > * {
-  max-width: 1800px;
+  max-width: none;
   margin-left: auto;
   margin-right: auto;
   width: 100%;
@@ -89,18 +89,20 @@ html, body {
 /* Input Group - Single Row Layout with All Controls */
 .input-group {
   display: flex;
+  width: 90%;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+  margin: 0 auto;
   margin-bottom: 0;
 }
 
 .pv-input {
-  flex: 1;
-  min-width: 300px;
-  max-width: 600px;
+  flex: 0 1 400px;
+  min-width: 200px;
+  max-width: none;
   padding: 0.75rem 1rem;
-  font-size: 1rem;
+  font-size: 1.2rem;
   border: 2px solid #e2e8f0;
   border-radius: 8px;
   transition: all 0.3s ease;
@@ -114,7 +116,8 @@ html, body {
 
 .plot-size-select {
   height: 45px;
-  font-size: 1.1rem;
+  width: 120px;
+  font-size: 1.2rem;
   border: 2px solid #e2e8f0;
   background: white;
   color: #2c3e50;
@@ -131,6 +134,19 @@ html, body {
 }
 
 
+
+.input-group .btn {
+  flex: 0 0 auto;
+  gap: 0.35rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 1.2rem;
+}
+
+.control-save {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
 
 /* Vertical Separator */
 .separator {
@@ -252,15 +268,15 @@ html, body {
 
 /* Time Window Select Dropdown */
 .time-window-select {
-  padding: 0.75rem 1rem;
+  padding: 0.45rem 0.6rem;
   border: 2px solid #e2e8f0;
   border-radius: 8px;
   background: white;
   color: #2c3e50;
-  font-size: 0.95rem;
+  font-size: 1.2rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-width: 140px;
+  min-width: 120px;
   font-weight: 500;
 }
 
@@ -324,10 +340,6 @@ html, body {
 
 /* Responsive adjustments */
 @media (max-width: 1200px) {
-  .pv-input {
-    min-width: 250px;
-  }
-  
   .separator {
     display: none;
   }
@@ -438,16 +450,19 @@ html, body {
 
 .pv-name {
   font-family: 'Courier New', monospace;
-  font-size: 1.3rem;
+  font-size: 2.5rem;
   color: #555;
   display: inline-block;
+  vertical-align: top;
+  line-height: 1;
   animation: scroll-left 10s linear infinite;
 }
 
 .pv-name-scroll-container
 {  
   width: 100%;
-  box-sizing: border-box;  
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 @keyframes scroll-left
@@ -457,25 +472,19 @@ html, body {
 }
 
 
-
-
-
-
 .right-sidebar .pv-value {
   font-size: 3rem;
   font-weight: 700;
   color: #1f77b4;
-  margin: 0.3rem 0;
+  line-height: 1;
+  margin: 0;
+  margin-top: 0.1rem;
 }
 
 .right-sidebar .pv-time {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #888;
 }
-
-
-
-
 
 @media (max-width: 480px) {
   .header-content h1 {
@@ -510,6 +519,12 @@ html, body {
   border-color: #ef4444;
 }
 
+/* Unit after a calculated energy, e.g. "9507.12 eV" */
+.right-sidebar .pv-value .pv-egu {
+  font-size: 1.5rem;
+  font-weight: 400;
+}
+
 .value-item.value-item-alarm .pv-value {
   color: #b91c1c;
   font-weight: bold;
@@ -539,4 +554,3 @@ html, body {
   color: #dc2626;
   background: #fee2e2;
 }
-
