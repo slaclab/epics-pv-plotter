@@ -693,7 +693,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         </div>
 
         {/* uPlot mounts its legend here (see legend.mount) */}
-        <div ref={legendRef} className="plot-legend" />
+        <div ref={legendRef} className="plot-legend uplot" />
 
         <div className="pv-tags">
           {SHOW_PV_TAGS &&
