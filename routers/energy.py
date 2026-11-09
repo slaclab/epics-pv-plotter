@@ -8,21 +8,21 @@ real EPICS PV (MONO_CALC marks it as calculated): the frontend connects to
 /ws/energy and this router monitors
 
     encoder_pv                raw encoder counts (.REP is added if no field given)
-    <encoder record>.ERES     encoder resolution, deg/count (field configurable)
+    <encoder record>.UREV     user units (deg) per revolution
+    <encoder record>.EREV     encoder counts per revolution
     d_spacing_pv              crystal d-spacing, Angstrom (store IOC)
-    offset_pv                 encoder offset (store IOC)
+    offset_pv                 encoder offset in degrees (store IOC)
 
 and streams the energy back in the same JSON format as a normal PV on /ws.
 The math itself lives in calc/energy.py.
 
-The encoder PV, store PV names and offset units are shared settings, kept in config.json
+The encoder PV and store PV names are shared settings, kept in config.json
 under "energy" next to aliases/EGUs, and edited via /api/energy-config.
 """
 
 import asyncio
 import logging
 import os
-from typing import Literal
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket
@@ -46,9 +46,6 @@ DEFAULT_ENERGY_CONFIG = {
     "encoder_pv": "BL22:SCAN:MASTER:MOTOR1.REP",
     "d_spacing_pv": "BL22:STORE:CRYSTAL_D",
     "offset_pv": "BL22:STORE:CRYSTAL_ENCODER_OFFSET",
-    "offset_units": "counts",      # "counts": (REP - offset) * ERES
-                                   # "deg":     REP * ERES + offset
-    "resolution_field": "ERES",    # read from the encoder's own record
 }
 
 # Same default as the /ws endpoint: remote CA gateways can be slow to connect
@@ -62,18 +59,20 @@ active_energy_streams = 0
 
 def get_energy_config() -> dict:
     stored = load_config().get("energy", {})
-    return {**DEFAULT_ENERGY_CONFIG, **(stored if isinstance(stored, dict) else {})}
+    if not isinstance(stored, dict):
+        stored = {}
+    # Only known keys, so settings removed from the app (the old
+    # "offset_units" / "resolution_field") are ignored in an older config.json.
+    return {key: stored.get(key, default) for key, default in DEFAULT_ENERGY_CONFIG.items()}
 
 
 class EnergyConfigUpdate(BaseModel):
     encoder_pv: str = DEFAULT_ENERGY_CONFIG["encoder_pv"]
     d_spacing_pv: str
     offset_pv: str
-    offset_units: Literal["counts", "deg"] = "counts"
-    resolution_field: str = "ERES"
 
     #no blank value check, registered by field_validator
-    @field_validator("encoder_pv", "d_spacing_pv", "offset_pv", "resolution_field")
+    @field_validator("encoder_pv", "d_spacing_pv", "offset_pv")
     @classmethod
     def not_blank(cls, value: str) -> str:
         value = value.strip()
@@ -89,7 +88,7 @@ class EnergyConfigUpdate(BaseModel):
 
 @router.get("/api/energy-config")
 async def read_energy_config():
-    """get the energy calculation settings (store PV names, offset units)"""
+    """get the energy calculation settings (encoder and store PV names)"""
     return get_energy_config()
 
 
@@ -120,8 +119,8 @@ def energy_pv_name(encoder: str) -> str:
     return f"{beamline}:{CALC_RECORD}{ENERGY_SUFFIX}"
 
 
-def resolution_pv(encoder_pv: str, field: str) -> str:
-    """<record>.ERES for the record the encoder PV belongs to."""
+def record_field_pv(encoder_pv: str, field: str) -> str:
+    """<record>.<field> for the record the encoder PV belongs to."""
     return f"{encoder_pv.rsplit('.', 1)[0]}.{field}"
 
 
@@ -135,7 +134,7 @@ def to_scalar(data):
         return None
 
 
-def build_message(stream_name, input_names, latest, config):
+def build_message(stream_name, input_names, latest):
     """Energy message in the /ws format, plus theta and the raw inputs."""
     values = {key: to_scalar(event.data) for key, event in latest.items()}
     worst = max(latest.values(), key=lambda event: event.metadata.severity)
@@ -151,7 +150,7 @@ def build_message(stream_name, input_names, latest, config):
     }
     try:
         theta = encoder_angle_deg(
-            values["rep"], values["eres"], values["offset"], config["offset_units"]
+            values["rep"], values["urev"], values["erev"], values["offset"]
         )
         message["theta"] = theta
         message["value"] = bragg_energy_ev(theta, values["d_spacing"])
@@ -166,11 +165,12 @@ def build_message(stream_name, input_names, latest, config):
 # ---------- one-shot read (easy to try from /docs) ----------
 
 def input_pv_names(encoder: str, config: dict) -> dict:
-    """The four PVs the energy is calculated from, keyed by role."""
+    """The PVs the energy is calculated from, keyed by role."""
     encoder_pv = normalize_encoder_pv(encoder)
     return {
         "rep": encoder_pv,
-        "eres": resolution_pv(encoder_pv, config["resolution_field"]),
+        "urev": record_field_pv(encoder_pv, "UREV"),
+        "erev": record_field_pv(encoder_pv, "EREV"),
         "d_spacing": config["d_spacing_pv"],
         "offset": config["offset_pv"],
     }
@@ -185,7 +185,7 @@ async def read_energy(
                     "default: encoder_pv from /api/energy-config",
     ),
 ):
-    """read the four input PVs once and return the calculated energy (eV)"""
+    """read the input PVs once and return the calculated energy (eV)"""
     config = get_energy_config()
     encoder = encoder or config["encoder_pv"]
     input_names = input_pv_names(encoder, config)
@@ -203,8 +203,7 @@ async def read_energy(
             status_code=504, detail=f"Could not read: {', '.join(missing)}"
         )
     latest = dict(zip(input_names, results))
-    message = build_message(energy_pv_name(encoder), input_names, latest, config)
-    message["offset_units"] = config["offset_units"]
+    message = build_message(energy_pv_name(encoder), input_names, latest)
     return message
 
 
@@ -291,7 +290,7 @@ async def energy_websocket(
                 continue
 
             await websocket.send_json(
-                build_message(stream_name, input_names, latest, config)
+                build_message(stream_name, input_names, latest)
             )
 
     except Exception as e:
