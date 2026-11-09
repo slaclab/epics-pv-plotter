@@ -546,8 +546,8 @@ function ConfigPage() {
       <section style={{ marginTop: "30px", maxWidth: "1100px" }}>
         <h2>Energy Calculation</h2>
         <p style={{ color: "#666" }}>
-          E (eV) = 12398.42 / (2 · d · sin θ), with θ from the encoder's REP and
-          its record's resolution field. Shown as the Live PV
+          E (eV) = 12398.42 / (2 · d · sin θ), with θ (deg) = REP × (UREV /
+          EREV) + offset, read from the encoder's record (same as xas_bluesky). Shown as the Live PV
           "&lt;beamline&gt;:MONO_CALC.ENERGY"; entering a PV with "Add Energy"
           also sets the encoder here.
         </p>
@@ -560,8 +560,7 @@ function ConfigPage() {
                 {[
                   ["encoder_pv", "Encoder PV (raw counts, e.g. ...MOTOR1.REP)"],
                   ["d_spacing_pv", "D-spacing PV (Å)"],
-                  ["offset_pv", "Encoder offset PV"],
-                  ["resolution_field", "Encoder resolution field (deg/count)"],
+                  ["offset_pv", "Encoder offset PV (degrees)"],
                 ].map(([key, label]) => (
                   <tr key={key}>
                     <td style={{ padding: "8px", width: "280px" }}>{label}</td>
@@ -577,25 +576,6 @@ function ConfigPage() {
                     </td>
                   </tr>
                 ))}
-                <tr>
-                  <td style={{ padding: "8px" }}>Offset units</td>
-                  <td style={{ padding: "8px" }}>
-                    <select
-                      value={energyConfig.offset_units}
-                      onChange={(e) =>
-                        handleEnergyConfigChange("offset_units", e.target.value)
-                      }
-                      style={{ padding: "4px" }}
-                    >
-                      <option value="counts">
-                        counts: θ = (REP − offset) × resolution
-                      </option>
-                      <option value="deg">
-                        deg: θ = REP × resolution + offset
-                      </option>
-                    </select>
-                  </td>
-                </tr>
               </tbody>
             </table>
             <div style={{ marginTop: "12px" }}>

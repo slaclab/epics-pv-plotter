@@ -2,14 +2,16 @@
 """
 Monochromator energy from a raw encoder reading (pure math, no EPICS).
 
-    theta (deg) = (REP - offset) * ERES        offset in encoder counts
-            or  =  REP * ERES + offset         offset in degrees
-    E (eV)      = hc / (2 * d * sin(theta))    d in Angstrom
+Same calculation as xas_bluesky (libs/xas-bluesky: BaseEPICSMotor
+._calc_encoder_position and utils/mono_utils.angle_to_energy):
+
+    theta (deg) = REP * (UREV / EREV) + offset     offset in degrees
+    E (eV)      = hc / (2 * d * sin(theta))        d in Angstrom
 
 Used by routers/energy.py. Can also be run by hand to check a value:
 
-    python -m calc.energy REP ERES D_SPACING [OFFSET] [counts|deg]
-    python -m calc.energy 109184 1.14329e-5 3.135601 0 counts
+    python -m calc.energy REP UREV EREV D_SPACING [OFFSET_DEG]
+    python -m calc.energy 109046 360 31488000 3.135601 10.7538
 """
 
 import math
@@ -17,9 +19,6 @@ import math
 # h*c in eV*Angstrom (CODATA 2018 exact values of h, c and e)
 # eV·Å 
 HC_EV_ANGSTROM = 12398.419843320026
-
-OFFSET_UNITS = ("counts", "deg")
-
 
 class EnergyCalcError(ValueError):
     """The inputs don't give a physical energy (missing, non-finite, theta outside (0, 90])."""
@@ -35,18 +34,15 @@ def _finite(name, value):
     return number
 
 
-def encoder_angle_deg(rep, eres, offset=0.0, offset_units="counts"):
-    """Bragg angle in degrees from raw encoder counts and resolution (deg/count)."""
+def encoder_angle_deg(rep, urev, erev, offset=0.0):
+    """Bragg angle in degrees: REP * (UREV / EREV) + offset (deg)."""
     rep = _finite("REP", rep)
-    eres = _finite("ERES", eres)
+    urev = _finite("UREV", urev)
+    erev = _finite("EREV", erev)
     offset = _finite("offset", offset)
-    if offset_units == "counts":
-        return (rep - offset) * eres
-    if offset_units == "deg":
-        return rep * eres + offset
-    raise EnergyCalcError(
-        f"offset_units must be one of {OFFSET_UNITS}, got {offset_units!r}"
-    )
+    if urev == 0 or erev == 0:
+        raise EnergyCalcError("UREV and EREV must be non-zero")
+    return rep * (urev / erev) + offset
 
 
 def bragg_energy_ev(theta_deg, d_spacing):
@@ -63,9 +59,9 @@ def bragg_energy_ev(theta_deg, d_spacing):
     return HC_EV_ANGSTROM / (2.0 * d_spacing * math.sin(math.radians(theta_deg)))
 
 
-def energy_from_encoder(rep, eres, d_spacing, offset=0.0, offset_units="counts"):
+def energy_from_encoder(rep, urev, erev, d_spacing, offset=0.0):
     """Photon energy in eV straight from the encoder inputs."""
-    theta = encoder_angle_deg(rep, eres, offset, offset_units)
+    theta = encoder_angle_deg(rep, urev, erev, offset)
     return bragg_energy_ev(theta, d_spacing)
 
 
@@ -73,14 +69,13 @@ if __name__ == "__main__":
     import sys
 
     args = sys.argv[1:]
-    if not 3 <= len(args) <= 5:
+    if not 4 <= len(args) <= 5:
         print(__doc__)
         sys.exit(1)
-    rep, eres, d = args[:3]
-    offset = args[3] if len(args) > 3 else 0.0
-    units = args[4] if len(args) > 4 else "counts"
+    rep, urev, erev, d = args[:4]
+    offset = args[4] if len(args) > 4 else 0.0
     try:
-        theta = encoder_angle_deg(rep, eres, offset, units)
+        theta = encoder_angle_deg(rep, urev, erev, offset)
         energy = bragg_energy_ev(theta, d)
     except EnergyCalcError as e:
         print(f"error: {e}")
