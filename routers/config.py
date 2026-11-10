@@ -28,6 +28,7 @@ DEFAULT_CONFIG = {
             "plots": [],
             "livePVNames": [],
             "globalTimeWindow": 60,
+            "showBeamlineStatus": False,
         }
     },
 }
@@ -179,6 +180,8 @@ class LayoutUpdate(BaseModel):
     plots: list
     livePVNames: list
     globalTimeWindow: int
+    # Older clients don't send it; default keeps the table hidden
+    showBeamlineStatus: bool = False
 
 
 @router.get("/layout")

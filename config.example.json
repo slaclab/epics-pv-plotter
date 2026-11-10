@@ -7,7 +7,13 @@
     "default": {
       "plots": [],
       "livePVNames": [],
-      "globalTimeWindow": 60
+      "globalTimeWindow": 60,
+      "showBeamlineStatus": false
     }
+  },
+  "energy": {
+    "encoder_pv": "BL22:SCAN:MASTER:MOTOR1.REP",
+    "d_spacing_pv": "BL22:STORE:CRYSTAL_D",
+    "offset_pv": "BL22:STORE:CRYSTAL_ENCODER_OFFSET"
   }
 }
