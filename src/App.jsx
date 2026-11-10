@@ -190,10 +190,11 @@ function App() {
   // so this always reflects the latest saved values
   const [thresholds, setThresholds] = useState({});
 
-  // Auto-load the standard config on startup when no layout was restored
-  // from localStorage (rehydration is synchronous, so plots is already set)
+  // On startup, read the standard config: always apply showBeamlineStatus,
+  // and auto-load the plot layout only when none was restored from
+  // localStorage (rehydration is synchronous, so plots is already set)
   useEffect(() => {
-    if (usePlotStore.getState().plots.length > 0) return;
+    const hasRestoredPlots = usePlotStore.getState().plots.length > 0;
 
     fetch(`${API_BASE}/api/config`)
       .then((res) => {
@@ -202,7 +203,10 @@ function App() {
       })
       .then((data) => {
         const layout = data?.layouts?.default;
-        if (layout?.plots?.length > 0) {
+        if (typeof layout?.showBeamlineStatus === 'boolean') {
+          setShowBeamlineStatus(layout.showBeamlineStatus);
+        }
+        if (!hasRestoredPlots && layout?.plots?.length > 0) {
           usePlotStore.getState().loadLayout(layout);
         }
       })
@@ -272,6 +276,7 @@ function App() {
           plots: plots,
           livePVNames: livePVNames,
           globalTimeWindow: globalTimeWindow,
+          showBeamlineStatus: showBeamlineStatus,
         }),
       });
       if (!res.ok) throw new Error('Save failed');
