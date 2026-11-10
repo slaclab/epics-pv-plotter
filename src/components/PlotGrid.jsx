@@ -47,10 +47,11 @@ export default function PlotGrid({ onLayoutLoaded }) {
       const layout = data.layouts.default; // whole layout object
       console.log("Incoming layout:", layout);
 
+      // Non-plot settings do not require any plots.
+      if (layout) onLayoutLoaded?.(layout);
+
       if (layout && layout.plots && layout.plots.length > 0) {
         usePlotStore.getState().loadLayout(layout); // whole layout object
-        // Non-plot settings (e.g. beamline status visibility) live in App
-        onLayoutLoaded?.(layout);
         console.log("Successfully loaded layout!");
       } else {
         console.warn("No plots found in the default layout.");
