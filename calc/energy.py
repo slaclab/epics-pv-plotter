@@ -20,6 +20,7 @@ import math
 # eV·Å 
 HC_EV_ANGSTROM = 12398.419843320026
 
+# inherit ValueError to check the value
 class EnergyCalcError(ValueError):
     """The inputs don't give a physical energy (missing, non-finite, theta outside (0, 90])."""
 

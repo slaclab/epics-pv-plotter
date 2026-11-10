@@ -12,7 +12,7 @@ import "./PlotGrid.css";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-export default function PlotGrid() {
+export default function PlotGrid({ onLayoutLoaded }) {
   const plots = usePlotStore((state) => state.plots);
   const updateLayout = usePlotStore((state) => state.updateLayout);
   const loadLayout = usePlotStore((state) => state.loadLayout);
@@ -46,6 +46,9 @@ export default function PlotGrid() {
 
       const layout = data.layouts.default; // whole layout object
       console.log("Incoming layout:", layout);
+
+      // Non-plot settings do not require any plots.
+      if (layout) onLayoutLoaded?.(layout);
 
       if (layout && layout.plots && layout.plots.length > 0) {
         usePlotStore.getState().loadLayout(layout); // whole layout object

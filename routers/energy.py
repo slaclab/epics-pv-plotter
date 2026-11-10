@@ -256,6 +256,7 @@ async def energy_websocket(
         ca_context = websocket.app.state.ca_context
         names = list(input_names.values())
         pvs = await ca_context.get_pvs(*names)
+        # PV Connection results
         results = await asyncio.gather(
             *(pv.wait_for_connection(timeout=PV_CONNECT_TIMEOUT) for pv in pvs),
             return_exceptions=True,
