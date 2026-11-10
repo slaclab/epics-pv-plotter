@@ -12,7 +12,7 @@ import "./PlotGrid.css";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-export default function PlotGrid() {
+export default function PlotGrid({ onLayoutLoaded }) {
   const plots = usePlotStore((state) => state.plots);
   const updateLayout = usePlotStore((state) => state.updateLayout);
   const loadLayout = usePlotStore((state) => state.loadLayout);
@@ -49,6 +49,8 @@ export default function PlotGrid() {
 
       if (layout && layout.plots && layout.plots.length > 0) {
         usePlotStore.getState().loadLayout(layout); // whole layout object
+        // Non-plot settings (e.g. beamline status visibility) live in App
+        onLayoutLoaded?.(layout);
         console.log("Successfully loaded layout!");
       } else {
         console.warn("No plots found in the default layout.");

@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlotStore } from './stores/usePlotStore';
 import { useLiveValueStore } from "./stores/useLiveValueStore";
@@ -185,6 +185,21 @@ function App() {
 
   // Beamline status table is hidden by default; the user can click to show it
   const [showBeamlineStatus, setShowBeamlineStatus] = useState(false);
+  // Set once the visibility has been chosen after mount (toggle click or a
+  // manual config load), so a slow startup /api/config can't override it
+  const beamlineStatusChosenRef = useRef(false);
+
+  const toggleBeamlineStatus = () => {
+    beamlineStatusChosenRef.current = true;
+    setShowBeamlineStatus((prev) => !prev);
+  };
+
+  // Apply a layout's saved visibility from an explicit user load
+  const applyLayoutBeamlineStatus = (layout) => {
+    if (typeof layout?.showBeamlineStatus !== 'boolean') return;
+    beamlineStatusChosenRef.current = true;
+    setShowBeamlineStatus(layout.showBeamlineStatus);
+  };
 
   // Per-PV { upper, lower } thresholds; App remounts when returning from /config,
   // so this always reflects the latest saved values
@@ -203,7 +218,10 @@ function App() {
       })
       .then((data) => {
         const layout = data?.layouts?.default;
-        if (typeof layout?.showBeamlineStatus === 'boolean') {
+        if (
+          typeof layout?.showBeamlineStatus === 'boolean' &&
+          !beamlineStatusChosenRef.current
+        ) {
           setShowBeamlineStatus(layout.showBeamlineStatus);
         }
         if (!hasRestoredPlots && layout?.plots?.length > 0) {
@@ -522,7 +540,7 @@ function App() {
           {/* Show/hide the Beamline Status table (hidden by default) */}
           <button
             className={`btn ${showBeamlineStatus ? 'btn-success' : 'btn-secondary'}`}
-            onClick={() => setShowBeamlineStatus((prev) => !prev)}
+            onClick={toggleBeamlineStatus}
             title={showBeamlineStatus ? 'Hide beamline status table' : 'Show beamline status table'}
           >
             {showBeamlineStatus ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -611,7 +629,7 @@ function App() {
         }}>
           {showBeamlineStatus && <BeamlineStatus />}
           <div style={{ flex: 1, overflow: 'auto' }}>
-            <PlotGrid />
+            <PlotGrid onLayoutLoaded={applyLayoutBeamlineStatus} />
           </div>
         </div>
 
