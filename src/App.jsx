@@ -498,6 +498,7 @@ function App() {
 	    <Plus size={18} />
 	    Add Live PV
 	  </button>
+	  {/*
 	  <button
 	    className="btn btn-secondary"
 	    onClick={handleAddEnergy}
@@ -506,6 +507,7 @@ function App() {
 	    <Zap size={18} />
 	    Add Energy
 	  </button>
+	  */}
           <button
             className="btn btn-danger"
             onClick={handleClearAll}
