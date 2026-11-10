@@ -57,11 +57,11 @@ function LivePVValue({
       className={`value-item${outOfRange ? " value-item-alarm" : ""}`}
       title={alarmTitle}
     >
-      <div className="pv-name">
-        <div className="pv-name-scroll-container">
-        {displayName}
-        </div>
-        </div>
+      <div
+        className={`live-pv-name${displayName.length > 8 ? " live-pv-name-scroll" : ""}`}
+      >
+        <div className="live-pv-name-container">{displayName}</div>
+      </div>
 
       <div className="pv-value">        
         {valueInfo && Number.isFinite(numericValue)
