@@ -31,7 +31,7 @@ function ConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState("");
 
-  // Shared settings for "Add Energy" PVs (calculated in routers/energy.py)
+  // Shared settings for the <beamline>:MONO_CALC.ENERGY PV (calculated in routers/energy.py)
   const [energyConfig, setEnergyConfig] = useState(null);
   const [energySaveStatus, setEnergySaveStatus] = useState("");
 
@@ -542,14 +542,14 @@ function ConfigPage() {
         )}
       </section>
 
-      {/* Energy calculation settings (used by "Add Energy" Live PVs) */}
+      {/* Energy calculation settings (used by the <beamline>:MONO_CALC.ENERGY PV) */}
       <section style={{ marginTop: "30px", maxWidth: "1100px" }}>
         <h2>Energy Calculation</h2>
         <p style={{ color: "#666" }}>
           E (eV) = 12398.42 / (2 · d · sin θ), with θ (deg) = REP × (UREV /
-          EREV) + offset, read from the encoder's record (same as xas_bluesky). Shown as the Live PV
-          "&lt;beamline&gt;:MONO_CALC.ENERGY"; entering a PV with "Add Energy"
-          also sets the encoder here.
+          EREV) + offset, read from the encoder's record (same as xas_bluesky). The result is
+          the PV "&lt;beamline&gt;:MONO_CALC.ENERGY", which can be added with "Add Plot" or
+          "Add Live PV" like any other PV. The encoder PV is set here.
         </p>
         {!energyConfig ? (
           <p>Energy settings could not be loaded.</p>
