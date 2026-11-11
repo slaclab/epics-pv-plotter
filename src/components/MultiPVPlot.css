@@ -175,6 +175,10 @@
     width: 100%;
   }
 
+  .plot-legend {
+    align-self: stretch;
+  }
+
   .plot-actions {
     align-self: flex-end;
   }
@@ -303,6 +307,19 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
+}
+
+.plot-legend.uplot {
+  /* The .uplot class (needed for uPlot's legend styles) sets
+     width: min-content, which makes the legend wrap as early as possible. */
+  width: auto;
+}
+
+/* Hidden header slots (PV tags, user input) would otherwise take a share
+   of the header width and the gaps around them away from the legend. */
+.plot-header > .pv-tags:empty,
+.plot-header > .user-input:empty {
+  display: none;
 }
 
 .plot-legend .u-legend {
