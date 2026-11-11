@@ -490,11 +490,9 @@ async def websocket_endpoint(
         # ============================================================
         # Step 4: Stream updates to client
         # ============================================================
-        # This loop continues until client disconnects or error occurs
-        async for event in subscription:
-            try:
-                # Construct update message
-
+        # Runs until the client disconnects or an error occurs
+        async def stream_updates():
+            async for event in subscription:
                 if log.isEnabledFor(logging.DEBUG):
                     raw_ts = event.metadata.timestamp
                     now = datetime.now()
@@ -510,15 +508,36 @@ async def websocket_endpoint(
                     'severity': event.metadata.severity,
                     'pv': pv
                 }
-                
+
                 # Send update to client
                 await websocket.send_json(data)
                 log.debug(f"📤 Sent to {client_id}: {data['value']}")
-                
-            except WebSocketDisconnect:
-                # Client closed connection gracefully
-                log.info(f"🔌 Client disconnected: {client_id}")
-                break
+
+        async def watch_client():
+            # Detects a closed browser even when the PV is not updating.
+            # Otherwise a slow PV (e.g. BLxx:OpenState) would only notice
+            # the disconnect on its next update, leaving the subscription
+            # open until then (same approach as routers/energy.py).
+            while True:
+                message = await websocket.receive()
+                if message["type"] == "websocket.disconnect":
+                    return
+
+        tasks = [
+            asyncio.create_task(stream_updates()),
+            asyncio.create_task(watch_client()),
+        ]
+        try:
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Re-raise a streaming error so it is handled below
+        for task in done:
+            task.result()
+        log.info(f"🔌 Client disconnected: {client_id}")
                 
     except WebSocketDisconnect:
         # Client disconnected during initial setup
