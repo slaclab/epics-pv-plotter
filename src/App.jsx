@@ -25,6 +25,7 @@ function LivePVValue({
   displayName,
   threshold,
   valueFormat,
+  egu,
   canRemove,
   onRemove,
 }) {
@@ -37,6 +38,9 @@ function LivePVValue({
   const numericValue =
     valueInfo?.value == null ? NaN : Number(valueInfo.value);
   const energy = isEnergyPV(pvName);
+  // Energy PVs always use eV; other PVs use the EGU saved on the Config page
+  // ("default" or empty means no unit is shown)
+  const unit = energy ? ENERGY_EGU : egu && egu !== "default" ? egu : null;
 
   const upper = threshold?.upper;
   const lower = threshold?.lower;
@@ -69,7 +73,7 @@ function LivePVValue({
               v.toFixed(energy ? 2 : 5)
             )
           : "---"}
-        {energy && <span className="pv-egu"> {ENERGY_EGU}</span>}
+        {unit && <span className="pv-egu"> {unit}</span>}
       </div>
 
       {valueInfo && (
@@ -241,6 +245,8 @@ function App() {
       .catch((err) => console.error("Failed to load thresholds:", err));
   }, []);
 
+
+
   // Per-PV "regular" / "exponential" value format for the Live PV Values panel
   const [valueFormats, setValueFormats] = useState({});
 
@@ -252,6 +258,19 @@ function App() {
       })
       .then((data) => setValueFormats(data || {}))
       .catch((err) => console.error("Failed to load value formats:", err));
+  }, []);
+
+  // Per-PV engineering units for the Live PV Values panel
+  const [egus, setEgus] = useState({});
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/egus`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => setEgus(data || {}))
+      .catch((err) => console.error("Failed to load EGUs:", err));
   }, []);
 
   // PV aliases for the Live PV Values panel, toggled like the plot legend
@@ -657,6 +676,7 @@ function App() {
                 displayName={getDisplayName(pvName)}
                 threshold={thresholds[pvName]}
                 valueFormat={valueFormats[pvName]}
+                egu={egus[pvName]}
                 canRemove={livePVNames.includes(pvName)}
                 onRemove={removeLivePV}
               />
