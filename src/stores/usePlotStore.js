@@ -280,6 +280,15 @@ export const usePlotStore = create(
         console.log(`Layout loaded: ${plots.length} plots`);
       },
 
+      // Bumped when aliases/EGUs/thresholds/value formats change on the
+      // server (e.g. via the epvpm CLI); components re-fetch those settings
+      // whenever it changes. Not persisted.
+      settingsRevision: 0,
+
+      bumpSettingsRevision: () => {
+        set((state) => ({ settingsRevision: state.settingsRevision + 1 }));
+      },
+
       // Remove all plots
       clearAll: () => {
         const state = get();

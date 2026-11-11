@@ -34,6 +34,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const [aliases, setAliases] = useState({});
   const [valueFormats, setValueFormats] = useState({});
   const badTimestampWarnedRef = useRef(false);
+  const settingsRevision = usePlotStore((state) => state.settingsRevision);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/egus`)
@@ -50,7 +51,7 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       .then((res) => res.json())
       .then((data) => setAliases(data || {}))
       .catch((err) => console.error("Failed to load aliases:", err));
-  }, []);
+  }, [settingsRevision]);
 
   //
   const [showAlias, setShowAlias] = useState(true);
