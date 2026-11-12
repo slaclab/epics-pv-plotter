@@ -91,7 +91,7 @@ def cmd_list(c: Client, _args):
     layout = (config.get("layouts") or {}).get("default") or {}
     aliases = config.get("aliases") or {}
     egus = config.get("egus") or {}
-    thresholds = config.get("thresholds") or {}
+    thresholds = c.call("GET", "/api/thresholds") or {}
     formats = config.get("value_formats") or {}
 
     def label(pv):
