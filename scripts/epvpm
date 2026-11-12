@@ -41,8 +41,9 @@ TIMEOUT_S = 10
 
 def base_url(host: str) -> str:
     """'bl22-pi' -> 'http://bl22-pi:8000'; full URLs are used as given"""
-    if "://" not in host:
-        host = f"http://{host}"
+    if "://" in host:
+        return host.rstrip("/")
+    host = f"http://{host}"
     parsed = urllib.parse.urlparse(host)
     if parsed.port is None:
         host = f"{parsed.scheme}://{parsed.hostname}:{DEFAULT_PORT}"
