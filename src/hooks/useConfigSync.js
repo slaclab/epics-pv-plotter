@@ -27,13 +27,15 @@ export function useConfigSync() {
     let stopped = false;
     const source = new EventSource(`${API_BASE}/api/config/events`);
 
+    let reloadSequence = 0;
     const reloadLayout = async () => {
+      const sequence = ++reloadSequence;
       try {
         const res = await fetch(`${API_BASE}/api/config`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const config = await res.json();
         const layout = config?.layouts?.default;
-        if (layout && !stopped) {
+        if (layout && !stopped && sequence === reloadSequence) {
           console.log("Server layout changed, reloading it");
           usePlotStore.getState().loadLayout(layout);
         }
