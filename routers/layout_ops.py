@@ -5,7 +5,9 @@ Fine-grained layout editing API - add/remove single plots and Live PVs.
 Used by the `epvpm` command-line tool (scripts/epvpm) so staff can edit the
 shared layout without opening a browser on the Pi. Each endpoint changes only
 the part it names, under a file lock, so two people editing at once don't
-overwrite each other (unlike POST /api/layout, which replaces everything).
+overwrite each other (unlike POST /api/layout, which replaces the whole
+layout). Locking is shared with every other config writer via
+routers.config.edit_config().
 
 GET /api/config/events pushes a message to open browsers whenever
 config.json changes, so they reload right away (GET /api/config/version
@@ -16,18 +18,17 @@ repackPlots) so plots added here land where the UI would put them.
 """
 
 import asyncio
-import fcntl
+import copy
 import hashlib
 import json
-from contextlib import contextmanager
-from typing import Iterator, List
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from routers import config as config_module
-from routers.config import CONFIG_FILE, DEFAULT_CONFIG, load_config, save_config
+from routers.config import DEFAULT_CONFIG, edit_config, load_config
 
 router = APIRouter(prefix="/api", tags=["layout-ops"])
 
@@ -35,8 +36,6 @@ router = APIRouter(prefix="/api", tags=["layout-ops"])
 GRID_COLS = 12
 DEFAULT_WIDTH = 4
 DEFAULT_HEIGHT = 3
-
-LOCK_FILE = CONFIG_FILE.with_suffix(".json.lock")
 
 # How often the events stream looks at config.json's modification time
 # (a local file stat, no network traffic) and how often it sends a
@@ -49,21 +48,10 @@ KEEPALIVE_S = 15.0
 LAYOUT_KEY = "layouts"
 
 
-@contextmanager
-def config_lock() -> Iterator[None]:
-    """Serialize read-modify-write cycles across processes/workers."""
-    with open(LOCK_FILE, "w", encoding="utf-8") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
-
-
 def _default_layout(config: dict) -> dict:
     layouts = config.setdefault(LAYOUT_KEY, {})
     layout = layouts.setdefault(
-        "default", json.loads(json.dumps(DEFAULT_CONFIG[LAYOUT_KEY]["default"]))
+        "default", copy.deepcopy(DEFAULT_CONFIG[LAYOUT_KEY]["default"])
     )
     layout.setdefault("plots", [])
     layout.setdefault("livePVNames", [])
@@ -204,8 +192,7 @@ async def add_plot(req: PlotAdd):
     if not pv_names:
         raise HTTPException(status_code=422, detail="At least one PV name is required")
     w, h = DEFAULT_WIDTH * req.width, DEFAULT_HEIGHT * req.height
-    with config_lock():
-        config = load_config()
+    with edit_config() as config:
         layout = _default_layout(config)
         plots = layout["plots"]
         plot = {
@@ -216,19 +203,16 @@ async def add_plot(req: PlotAdd):
             "h": h,
         }
         plots.append(plot)
-        save_config(config)
     return {"status": "ok", "plot": plot}
 
 
 @router.delete("/layout/plots/{plot_id}")
 async def remove_plot(plot_id: int):
     """remove a whole plot and close the gap it leaves"""
-    with config_lock():
-        config = load_config()
+    with edit_config() as config:
         layout = _default_layout(config)
         plot = _find_plot(layout, plot_id)
         layout["plots"] = repack_plots([p for p in layout["plots"] if p is not plot])
-        save_config(config)
     return {"status": "ok", "removed": plot}
 
 
@@ -239,19 +223,16 @@ class PlotPVs(BaseModel):
 @router.post("/layout/plots/{plot_id}/pvs")
 async def add_pvs_to_plot(plot_id: int, req: PlotPVs):
     """add PV traces to an existing plot"""
-    with config_lock():
-        config = load_config()
+    with edit_config() as config:
         plot = _find_plot(_default_layout(config), plot_id)
         plot["pvNames"] = _normalize_names(plot.get("pvNames", []) + req.pv_names)
-        save_config(config)
     return {"status": "ok", "plot": plot}
 
 
 @router.delete("/layout/plots/{plot_id}/pvs/{pv_name:path}")
 async def remove_pv_from_plot(plot_id: int, pv_name: str):
     """remove one PV trace; a plot left with no PVs is removed entirely"""
-    with config_lock():
-        config = load_config()
+    with edit_config() as config:
         layout = _default_layout(config)
         plot = _find_plot(layout, plot_id)
         if pv_name not in plot.get("pvNames", []):
@@ -262,7 +243,6 @@ async def remove_pv_from_plot(plot_id: int, pv_name: str):
         plot_removed = not plot["pvNames"]
         if plot_removed:
             layout["plots"] = repack_plots([p for p in layout["plots"] if p is not plot])
-        save_config(config)
     return {"status": "ok", "plot_removed": plot_removed}
 
 
@@ -272,24 +252,20 @@ async def remove_pv_from_plot(plot_id: int, pv_name: str):
 @router.post("/layout/live-pvs")
 async def add_live_pvs(req: PlotPVs):
     """append PVs to the Live PV Values list (duplicates are ignored)"""
-    with config_lock():
-        config = load_config()
+    with edit_config() as config:
         layout = _default_layout(config)
         layout["livePVNames"] = _normalize_names(layout["livePVNames"] + req.pv_names)
-        save_config(config)
     return {"status": "ok", "livePVNames": layout["livePVNames"]}
 
 
 @router.delete("/layout/live-pvs/{pv_name:path}")
 async def remove_live_pv(pv_name: str):
     """remove one PV from the Live PV Values list"""
-    with config_lock():
-        config = load_config()
+    with edit_config() as config:
         layout = _default_layout(config)
         if pv_name not in layout["livePVNames"]:
             raise HTTPException(
                 status_code=404, detail=f"{pv_name} is not in the Live PV list"
             )
         layout["livePVNames"] = [n for n in layout["livePVNames"] if n != pv_name]
-        save_config(config)
     return {"status": "ok", "livePVNames": layout["livePVNames"]}

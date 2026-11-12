@@ -29,7 +29,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, WebSocket
 from pydantic import BaseModel, field_validator
 
 from calc.energy import EnergyCalcError, encoder_angle_deg, bragg_energy_ev
-from routers.config import load_config, save_config
+from routers.config import edit_config, load_config
 
 log = logging.getLogger(__name__)
 
@@ -95,9 +95,8 @@ async def read_energy_config():
 @router.post("/api/energy-config")
 async def update_energy_config(update: EnergyConfigUpdate):
     """save the energy calculation settings"""
-    config = load_config()
-    config["energy"] = update.model_dump()
-    save_config(config)
+    with edit_config() as config:
+        config["energy"] = update.model_dump()
     return {"status": "ok", "energy": config["energy"]}
 
 

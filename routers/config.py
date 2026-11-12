@@ -4,11 +4,14 @@ Configuration API router - handles shared aliases and layouts.
 Stored in config.json so all browsers share the same settings.
 """
 
+import copy
 import errno
+import fcntl
 import json
 import logging
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, Any, Literal
+from typing import Dict, Any, Iterator, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -35,15 +38,16 @@ DEFAULT_CONFIG = {
 
 
 def load_config() -> dict:
+    # deepcopy: callers mutate the result, which must not change the defaults
     if not CONFIG_FILE.exists():
-        return DEFAULT_CONFIG.copy()
+        return copy.deepcopy(DEFAULT_CONFIG)
     try:
         # open config file and load the json data
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError) as e:
         log.warning(f"Failed to read config, using default: {e}")
-        return DEFAULT_CONFIG.copy()
+        return copy.deepcopy(DEFAULT_CONFIG)
 
 
 def save_config(config: dict) -> None:
@@ -68,6 +72,42 @@ def save_config(config: dict) -> None:
         raise HTTPException(status_code=500, detail="Failed to save config")
 
 
+@contextmanager
+def config_lock() -> Iterator[None]:
+    """
+    Exclusive lock on config.json across processes (e.g. several uvicorn
+    workers). Every writer must hold it for its whole read-modify-write so
+    one request can't save a stale copy over another's change.
+
+    Never `await` while holding it: the flock call blocks, and a second
+    coroutine in the same process waiting on it would stall the event loop.
+    """
+    lock_path = CONFIG_FILE.with_suffix(".json.lock")
+    with open(lock_path, "w", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+@contextmanager
+def edit_config() -> Iterator[dict]:
+    """
+    Locked read-modify-write of config.json:
+
+        with edit_config() as config:
+            config["aliases"][pv] = alias
+
+    The config is saved when the block ends normally; if the block raises
+    (e.g. HTTPException), nothing is written.
+    """
+    with config_lock():
+        config = load_config()
+        yield config
+        save_config(config)
+
+
 # ---------- complete setup of the router ----------
 
 @router.get("/config")
@@ -79,7 +119,8 @@ async def get_config():
 @router.post("/config")
 async def update_config(config: Dict[str, Any]):
     """save the configuration"""
-    save_config(config)
+    with config_lock():
+        save_config(config)
     return {"status": "ok"}
 
 
@@ -99,19 +140,17 @@ class AliasUpdate(BaseModel):
 @router.post("/aliases")
 async def set_alias(update: AliasUpdate):
     """set/update single  PV alias"""
-    config = load_config()
-    config.setdefault("aliases", {})
-    config["aliases"][update.pv_name] = update.alias
-    save_config(config)
+    with edit_config() as config:
+        config.setdefault("aliases", {})
+        config["aliases"][update.pv_name] = update.alias
     return {"status": "ok", "aliases": config["aliases"]}
 
 
-@router.delete("/aliases/{pv_name}")
+@router.delete("/aliases/{pv_name:path}")
 async def delete_alias(pv_name: str):
     """ remove a certain PV's alias """
-    config = load_config()
-    config.get("aliases", {}).pop(pv_name, None)
-    save_config(config)
+    with edit_config() as config:
+        config.get("aliases", {}).pop(pv_name, None)
     return {"status": "ok"}
 
 @router.get("/egus")
@@ -128,19 +167,17 @@ class EguUpdate(BaseModel):
 @router.post("/egus")
 async def set_egu(update: EguUpdate):
     """set/update a single PV's EGU"""
-    config = load_config()
-    config.setdefault("egus", {})
-    config["egus"][update.pv_name] = update.egu
-    save_config(config)
+    with edit_config() as config:
+        config.setdefault("egus", {})
+        config["egus"][update.pv_name] = update.egu
     return {"status": "ok", "egus": config["egus"]}
 
 
 @router.delete("/egus/{pv_name:path}")
 async def delete_egu(pv_name: str):
     """remove a certain PV's EGU (back to the default)"""
-    config = load_config()
-    config.get("egus", {}).pop(pv_name, None)
-    save_config(config)
+    with edit_config() as config:
+        config.get("egus", {}).pop(pv_name, None)
     return {"status": "ok"}
 
 
@@ -160,19 +197,17 @@ class ValueFormatUpdate(BaseModel):
 @router.post("/value-formats")
 async def set_value_format(update: ValueFormatUpdate):
     """set/update a single PV's value format"""
-    config = load_config()
-    config.setdefault("value_formats", {})
-    config["value_formats"][update.pv_name] = update.value_format
-    save_config(config)
+    with edit_config() as config:
+        config.setdefault("value_formats", {})
+        config["value_formats"][update.pv_name] = update.value_format
     return {"status": "ok", "value_formats": config["value_formats"]}
 
 
 @router.delete("/value-formats/{pv_name:path}")
 async def delete_value_format(pv_name: str):
     """remove a certain PV's value format (back to regular)"""
-    config = load_config()
-    config.get("value_formats", {}).pop(pv_name, None)
-    save_config(config)
+    with edit_config() as config:
+        config.get("value_formats", {}).pop(pv_name, None)
     return {"status": "ok"}
 
 
@@ -191,8 +226,8 @@ async def get_layout():
 
 @router.post("/layout")
 async def save_layout(layout: LayoutUpdate):
-    config = load_config()                        #
-    config.setdefault("layouts", {})
-    config["layouts"]["default"] = layout.dict()  #  layouts
-    save_config(config)                           # aliases/egus
+    # only the layout is replaced; aliases/egus/etc. are kept
+    with edit_config() as config:
+        config.setdefault("layouts", {})
+        config["layouts"]["default"] = layout.model_dump()
     return {"status": "ok"}

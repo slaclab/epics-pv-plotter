@@ -186,7 +186,8 @@ def cmd_set_threshold(c, a):
         sys.exit("error: give --upper and/or --lower")
     body = {"pv_name": a.pv_name, "upper": a.upper, "lower": a.lower}
     c.call("POST", "/api/thresholds", body)
-    print(f"{a.pv_name} limits: lower={a.lower} upper={a.upper}")
+    limits = [f"{k} {v}" for k, v in (("lower", a.lower), ("upper", a.upper)) if v is not None]
+    print(f"{a.pv_name} limits: {', '.join(limits)}")
 
 
 def cmd_remove_threshold(c, a):
