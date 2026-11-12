@@ -7,21 +7,26 @@ shared layout without opening a browser on the Pi. Each endpoint changes only
 the part it names, under a file lock, so two people editing at once don't
 overwrite each other (unlike POST /api/layout, which replaces everything).
 
-GET /api/config/version lets open browsers notice changes and reload.
+GET /api/config/events pushes a message to open browsers whenever
+config.json changes, so they reload right away (GET /api/config/version
+returns the same fingerprints on demand).
 
 Plot placement mirrors src/stores/usePlotStore.js (findBestPosition /
 repackPlots) so plots added here land where the UI would put them.
 """
 
+import asyncio
 import fcntl
 import hashlib
 import json
 from contextlib import contextmanager
 from typing import Iterator, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from routers import config as config_module
 from routers.config import CONFIG_FILE, DEFAULT_CONFIG, load_config, save_config
 
 router = APIRouter(prefix="/api", tags=["layout-ops"])
@@ -32,6 +37,12 @@ DEFAULT_WIDTH = 4
 DEFAULT_HEIGHT = 3
 
 LOCK_FILE = CONFIG_FILE.with_suffix(".json.lock")
+
+# How often the events stream looks at config.json's modification time
+# (a local file stat, no network traffic) and how often it sends a
+# keep-alive comment so idle connections aren't dropped by proxies
+WATCH_INTERVAL_S = 1.0
+KEEPALIVE_S = 15.0
 
 # Top-level config keys that are not the layout (shown by the browser
 # outside the plot grid: aliases, EGUs, thresholds, value formats, energy)
@@ -116,8 +127,7 @@ def _digest(value) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
-@router.get("/config/version")
-async def get_config_version():
+def config_version() -> dict:
     """
     Hashes of the layout and of everything else, so a browser can reload
     only the part that changed (a new alias must not discard unsaved plot
@@ -127,6 +137,54 @@ async def get_config_version():
     layout = config.get(LAYOUT_KEY, {}).get("default", {})
     settings = {k: v for k, v in config.items() if k != LAYOUT_KEY}
     return {"layout": _digest(layout), "settings": _digest(settings)}
+
+
+def _config_mtime():
+    try:
+        return config_module.CONFIG_FILE.stat().st_mtime_ns
+    except FileNotFoundError:
+        return None
+
+
+@router.get("/config/version")
+async def get_config_version():
+    return config_version()
+
+
+@router.get("/config/events")
+async def config_events(request: Request):
+    """
+    Server-Sent Events stream: sends the current version on connect, then a
+    new one each time config.json changes (from the UI, epvpm, or a manual
+    edit). Watching the file rather than hooking save_config also works with
+    several uvicorn workers.
+    """
+
+    async def stream():
+        last_mtime = object()  # forces a first message
+        last_version = None
+        idle = 0.0
+        while not await request.is_disconnected():
+            mtime = _config_mtime()
+            if mtime != last_mtime:
+                last_mtime = mtime
+                version = config_version()
+                if version != last_version:
+                    last_version = version
+                    idle = 0.0
+                    yield f"data: {json.dumps(version)}\n\n"
+            if idle >= KEEPALIVE_S:
+                idle = 0.0
+                yield ": keep-alive\n\n"
+            await asyncio.sleep(WATCH_INTERVAL_S)
+            idle += WATCH_INTERVAL_S
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        # X-Accel-Buffering: stop nginx from holding events back
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---------- plots ----------

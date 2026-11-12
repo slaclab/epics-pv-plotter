@@ -4,7 +4,7 @@ epvpm - EPICS PV Plotter Management
 
 Edit the shared plotter configuration (config.json on the Pi) from any
 machine on the network, without VNC. Open plotter browsers pick up the
-change within a few seconds.
+change within about a second.
 
 Examples:
   epvpm list
