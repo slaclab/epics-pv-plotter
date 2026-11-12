@@ -22,9 +22,14 @@ Examples:
   epvpm set-format BL22:SCAN:MASTER:ADC1 exponential
 
 Which plotter to talk to (first match wins):
-  --host HOST            e.g. --host bl22-pi  or  --host http://10.0.0.5:8000
+  --host HOST
   $EPVPM_HOST
-  http://localhost:8000
+  localhost
+
+A bare host name gets port 8000 (the gateway); a full URL is used as given:
+  bl22-pi              -> http://bl22-pi:8000
+  bl22-pi:9000         -> http://bl22-pi:9000
+  http://bl22-pi       -> http://bl22-pi        (port 80, through nginx)
 """
 
 import argparse
@@ -211,7 +216,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--host",
         default=os.environ.get("EPVPM_HOST", "localhost"),
-        help="plotter host or URL (default: $EPVPM_HOST or localhost; port 8000)",
+        help="plotter host or full URL (default: $EPVPM_HOST or localhost); "
+        "a bare host gets port 8000, a URL is used as given",
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
