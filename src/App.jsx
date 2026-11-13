@@ -10,6 +10,7 @@ import BeamlineStatus from './components/BeamlineStatus';
 import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X, Pause, Play, Eye, EyeOff, Zap } from 'lucide-react';
 import './App.css';
 import { API_BASE } from "./utils/constants";
+import { useConfigSync } from "./hooks/useConfigSync";
 import { formatPVValue } from "./utils/valueFormat";
 import {
   isEnergyPV,
@@ -187,6 +188,10 @@ function App() {
 
   const navigate = useNavigate();
 
+  // Pick up config edits made elsewhere (epvpm CLI, another browser)
+  useConfigSync();
+  const settingsRevision = usePlotStore((state) => state.settingsRevision);
+
   // Beamline status table is hidden by default; the user can click to show it
   const [showBeamlineStatus, setShowBeamlineStatus] = useState(false);
   // Set once the visibility has been chosen after mount (toggle click or a
@@ -243,7 +248,7 @@ function App() {
       })
       .then((data) => setThresholds(data || {}))
       .catch((err) => console.error("Failed to load thresholds:", err));
-  }, []);
+  }, [settingsRevision]);
 
 
 
@@ -258,7 +263,7 @@ function App() {
       })
       .then((data) => setValueFormats(data || {}))
       .catch((err) => console.error("Failed to load value formats:", err));
-  }, []);
+  }, [settingsRevision]);
 
   // Per-PV engineering units for the Live PV Values panel
   const [egus, setEgus] = useState({});
@@ -271,7 +276,7 @@ function App() {
       })
       .then((data) => setEgus(data || {}))
       .catch((err) => console.error("Failed to load EGUs:", err));
-  }, []);
+  }, [settingsRevision]);
 
   // PV aliases for the Live PV Values panel, toggled like the plot legend
   const [aliases, setAliases] = useState({});
@@ -285,7 +290,7 @@ function App() {
       })
       .then((data) => setAliases(data || {}))
       .catch((err) => console.error("Failed to load aliases:", err));
-  }, []);
+  }, [settingsRevision]);
 
   // Alias if enabled and available, else the raw PV name
   // (energy PVs get a readable "Energy (<encoder>)" label instead)

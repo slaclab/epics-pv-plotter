@@ -26,6 +26,7 @@ import uvicorn
 from routers import config as config_router
 from routers import thresholds as thresholds_router
 from routers import energy as energy_router
+from routers import layout_ops as layout_ops_router
 from caproto.asyncio.client import Context
 import numpy as np
 
@@ -137,6 +138,7 @@ app = FastAPI(
 
 # Add routers 
 app.include_router(config_router.router)
+app.include_router(layout_ops_router.router)
 app.include_router(thresholds_router.router)
 app.include_router(energy_router.router)
 
@@ -591,13 +593,13 @@ if __name__ == '__main__':
             
     Alternative usage with uvicorn command:
         Development:
-            uvicorn epics_fastapi_gateway:app --reload --host 0.0.0.0 --port 8000
+            uvicorn epics_fastapi_gateway:app --reload --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 5
             
         Production (single worker):
-            uvicorn epics_fastapi_gateway:app --host 0.0.0.0 --port 8000
+            uvicorn epics_fastapi_gateway:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 5
             
         Production (multiple workers):
-            uvicorn epics_fastapi_gateway:app --host 0.0.0.0 --port 8000 --workers 4
+            uvicorn epics_fastapi_gateway:app --host 0.0.0.0 --port 8000 --workers 4 --timeout-graceful-shutdown 5
     """
     
     import sys
@@ -630,6 +632,11 @@ if __name__ == '__main__':
         # Development: Show all requests
         # Production:  Can disable for performance (access_log=False)
         access_log=is_dev_mode,
+
+        # Open /api/config/events streams never finish on their own, so
+        # without a limit a restart would wait forever; after 5 s the
+        # remaining connections are closed (browsers reconnect themselves)
+        timeout_graceful_shutdown=5,
         
         # Additional production settings (commented out, uncomment as needed)
         # workers=4,              # Number of worker processes (production only, incompatible with reload=True)

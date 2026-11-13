@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+epvpm - EPICS PV Plotter Management
+
+Edit the shared plotter configuration (config.json on the Pi) from any
+machine on the network, without VNC. Open plotter browsers pick up the
+change within about a second.
+
+Examples:
+  epvpm list
+  epvpm add-plot BL22:SCAN:MASTER:ADC1
+  epvpm add-plot BL22:SCAN:MASTER:ADC1 BL22:SCAN:MASTER:ADC2 --width 2
+  epvpm remove-plot 3
+  epvpm add-to-plot 3 BL22:SCAN:MASTER:ADC4
+  epvpm remove-from-plot 3 BL22:SCAN:MASTER:ADC4
+  epvpm add-live-pv BL22:SCAN:MASTER:ADC4 BL22:SCAN:MASTER:ADC5
+  epvpm remove-live-pv BL22:SCAN:MASTER:ADC4
+  epvpm set-alias BL22:SCAN:MASTER:ADC1 I0
+  epvpm remove-alias BL22:SCAN:MASTER:ADC1
+  epvpm set-egu BL22:SCAN:MASTER:ADC1 Volts
+  epvpm set-threshold BL22:SCAN:MASTER:ADC1 --upper 2.0 --lower 0
+  epvpm set-format BL22:SCAN:MASTER:ADC1 exponential
+
+Which plotter to talk to (first match wins):
+  --host HOST
+  $EPVPM_HOST
+  localhost
+
+A bare host name gets port 8000 (the gateway); a full URL is used as given:
+  bl22-pi              -> http://bl22-pi:8000
+  bl22-pi:9000         -> http://bl22-pi:9000
+  http://bl22-pi       -> http://bl22-pi        (port 80, through nginx)
+"""
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+DEFAULT_PORT = 8000
+TIMEOUT_S = 10
+
+
+def base_url(host: str) -> str:
+    """'bl22-pi' -> 'http://bl22-pi:8000'; full URLs are used as given"""
+    if "://" in host:
+        return host.rstrip("/")
+    host = f"http://{host}"
+    parsed = urllib.parse.urlparse(host)
+    if parsed.port is None:
+        host = f"{parsed.scheme}://{parsed.hostname}:{DEFAULT_PORT}"
+    return host.rstrip("/")
+
+
+class Client:
+    def __init__(self, url: str):
+        self.url = url
+
+    def call(self, method: str, path: str, body=None):
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        req = urllib.request.Request(
+            self.url + path,
+            data=data,
+            method=method,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+                return json.loads(resp.read() or b"null")
+        except urllib.error.HTTPError as e:
+            try:
+                detail = json.loads(e.read()).get("detail", e.reason)
+            except (ValueError, AttributeError):
+                detail = e.reason
+            if isinstance(detail, list):  # pydantic validation errors
+                detail = "; ".join(d.get("msg", str(d)) for d in detail)
+            sys.exit(f"error: {detail}")
+        except urllib.error.URLError as e:
+            sys.exit(
+                f"error: cannot reach the plotter at {self.url} ({e.reason}).\n"
+                "Check --host / $EPVPM_HOST and that the gateway is running."
+            )
+
+
+def pv_path(pv_name: str) -> str:
+    return urllib.parse.quote(pv_name, safe="")
+
+
+# ---------- commands ----------
+
+
+def cmd_list(c: Client, _args):
+    config = c.call("GET", "/api/config")
+    layout = (config.get("layouts") or {}).get("default") or {}
+    aliases = config.get("aliases") or {}
+    egus = config.get("egus") or {}
+    thresholds = c.call("GET", "/api/thresholds") or {}
+    formats = config.get("value_formats") or {}
+
+    def label(pv):
+        extras = []
+        if pv in aliases:
+            extras.append(f'alias "{aliases[pv]}"')
+        if pv in egus:
+            extras.append(f"egu {egus[pv]}")
+        t = thresholds.get(pv)
+        if isinstance(t, dict) and t:
+            extras.append(
+                "limits " + ", ".join(f"{k} {v}" for k, v in sorted(t.items()))
+            )
+        if formats.get(pv) == "exponential":
+            extras.append("exponential")
+        return pv + (f"  ({'; '.join(extras)})" if extras else "")
+
+    plots = sorted(layout.get("plots", []), key=lambda p: (p["y"], p["x"]))
+    print(f"Plots ({len(plots)}):")
+    for p in plots:
+        print(f"  [{p['id']}] at ({p['x']},{p['y']}) size {p['w']}x{p['h']}")
+        for pv in p.get("pvNames", []):
+            print(f"        {label(pv)}")
+    live = layout.get("livePVNames", [])
+    print(f"Live PVs ({len(live)}):")
+    for pv in live:
+        print(f"  {label(pv)}")
+    print(f"Time window: {layout.get('globalTimeWindow', 60)} s")
+
+
+def cmd_add_plot(c, a):
+    r = c.call(
+        "POST",
+        "/api/layout/plots",
+        {"pv_names": a.pv_names, "width": a.width, "height": a.height},
+    )
+    p = r["plot"]
+    print(f"Added plot [{p['id']}] at ({p['x']},{p['y']}): {', '.join(p['pvNames'])}")
+
+
+def cmd_remove_plot(c, a):
+    r = c.call("DELETE", f"/api/layout/plots/{a.plot_id}")
+    print(f"Removed plot [{a.plot_id}]: {', '.join(r['removed'].get('pvNames', []))}")
+
+
+def cmd_add_to_plot(c, a):
+    r = c.call("POST", f"/api/layout/plots/{a.plot_id}/pvs", {"pv_names": a.pv_names})
+    print(f"Plot [{a.plot_id}] now shows: {', '.join(r['plot']['pvNames'])}")
+
+
+def cmd_remove_from_plot(c, a):
+    r = c.call("DELETE", f"/api/layout/plots/{a.plot_id}/pvs/{pv_path(a.pv_name)}")
+    msg = f"Removed {a.pv_name} from plot [{a.plot_id}]"
+    if r.get("plot_removed"):
+        msg += " (plot was empty, so it was removed)"
+    print(msg)
+
+
+def cmd_add_live_pv(c, a):
+    r = c.call("POST", "/api/layout/live-pvs", {"pv_names": a.pv_names})
+    print(f"Live PVs: {', '.join(r['livePVNames'])}")
+
+
+def cmd_remove_live_pv(c, a):
+    c.call("DELETE", f"/api/layout/live-pvs/{pv_path(a.pv_name)}")
+    print(f"Removed {a.pv_name} from Live PVs")
+
+
+def cmd_set_alias(c, a):
+    c.call("POST", "/api/aliases", {"pv_name": a.pv_name, "alias": a.alias})
+    print(f'{a.pv_name} -> "{a.alias}"')
+
+
+def cmd_remove_alias(c, a):
+    c.call("DELETE", f"/api/aliases/{pv_path(a.pv_name)}")
+    print(f"Removed alias for {a.pv_name}")
+
+
+def cmd_set_egu(c, a):
+    c.call("POST", "/api/egus", {"pv_name": a.pv_name, "egu": a.egu})
+    print(f"{a.pv_name} units: {a.egu}")
+
+
+def cmd_remove_egu(c, a):
+    c.call("DELETE", f"/api/egus/{pv_path(a.pv_name)}")
+    print(f"Removed units for {a.pv_name}")
+
+
+def cmd_set_threshold(c, a):
+    if a.upper is None and a.lower is None:
+        sys.exit("error: give --upper and/or --lower")
+    body = {"pv_name": a.pv_name, "upper": a.upper, "lower": a.lower}
+    c.call("POST", "/api/thresholds", body)
+    limits = [f"{k} {v}" for k, v in (("lower", a.lower), ("upper", a.upper)) if v is not None]
+    print(f"{a.pv_name} limits: {', '.join(limits)}")
+
+
+def cmd_remove_threshold(c, a):
+    c.call("DELETE", f"/api/thresholds/{pv_path(a.pv_name)}")
+    print(f"Removed limits for {a.pv_name}")
+
+
+def cmd_set_format(c, a):
+    c.call(
+        "POST", "/api/value-formats", {"pv_name": a.pv_name, "value_format": a.format}
+    )
+    print(f"{a.pv_name} format: {a.format}")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="epvpm",
+        description="EPICS PV Plotter Management - edit the shared plotter config.",
+        epilog="Run 'epvpm COMMAND -h' for help on one command.",
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("EPVPM_HOST", "localhost"),
+        help="plotter host or full URL (default: $EPVPM_HOST or localhost); "
+        "a bare host gets port 8000, a URL is used as given",
+    )
+    sub = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
+
+    def add(name, func, help_text):
+        p = sub.add_parser(name, help=help_text, description=help_text)
+        p.set_defaults(func=func)
+        return p
+
+    add("list", cmd_list, "show plots, Live PVs and per-PV settings")
+
+    p = add("add-plot", cmd_add_plot, "add a plot showing one or more PVs")
+    p.add_argument("pv_names", nargs="+", metavar="PV")
+    p.add_argument("--width", type=int, default=1, choices=[1, 2, 3],
+                   help="width in default plot sizes (default 1)")
+    p.add_argument("--height", type=int, default=1, choices=[1, 2],
+                   help="height in default plot sizes (default 1)")
+
+    p = add("remove-plot", cmd_remove_plot, "remove a plot (ids from 'epvpm list')")
+    p.add_argument("plot_id", type=int)
+
+    p = add("add-to-plot", cmd_add_to_plot, "add PV traces to an existing plot")
+    p.add_argument("plot_id", type=int)
+    p.add_argument("pv_names", nargs="+", metavar="PV")
+
+    p = add("remove-from-plot", cmd_remove_from_plot, "remove one PV trace from a plot")
+    p.add_argument("plot_id", type=int)
+    p.add_argument("pv_name", metavar="PV")
+
+    p = add("add-live-pv", cmd_add_live_pv, "add PVs to the Live PV Values panel")
+    p.add_argument("pv_names", nargs="+", metavar="PV")
+
+    p = add("remove-live-pv", cmd_remove_live_pv, "remove a PV from the Live PV panel")
+    p.add_argument("pv_name", metavar="PV")
+
+    p = add("set-alias", cmd_set_alias, "set a PV's display alias")
+    p.add_argument("pv_name", metavar="PV")
+    p.add_argument("alias")
+
+    p = add("remove-alias", cmd_remove_alias, "remove a PV's alias")
+    p.add_argument("pv_name", metavar="PV")
+
+    p = add("set-egu", cmd_set_egu, "set a PV's engineering units")
+    p.add_argument("pv_name", metavar="PV")
+    p.add_argument("egu")
+
+    p = add("remove-egu", cmd_remove_egu, "remove a PV's engineering units")
+    p.add_argument("pv_name", metavar="PV")
+
+    p = add("set-threshold", cmd_set_threshold, "set a PV's alarm limits")
+    p.add_argument("pv_name", metavar="PV")
+    p.add_argument("--upper", type=float)
+    p.add_argument("--lower", type=float)
+
+    p = add("remove-threshold", cmd_remove_threshold, "remove a PV's alarm limits")
+    p.add_argument("pv_name", metavar="PV")
+
+    p = add("set-format", cmd_set_format, "set a PV's Live value format")
+    p.add_argument("pv_name", metavar="PV")
+    p.add_argument("format", choices=["regular", "exponential"])
+
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    args.func(Client(base_url(args.host)), args)
+
+
+if __name__ == "__main__":
+    main()

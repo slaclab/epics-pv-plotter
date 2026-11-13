@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from routers.config import load_config, save_config
+from routers.config import edit_config, load_config
 
 router = APIRouter(prefix="/api", tags=["thresholds"])
 
@@ -81,17 +81,15 @@ async def set_threshold(update: ThresholdUpdate):
     if update.lower is not None:
         entry["lower"] = update.lower
 
-    config = load_config()
-    config.setdefault("thresholds", {})
-    config["thresholds"][update.pv_name] = entry
-    save_config(config)
+    with edit_config() as config:
+        config.setdefault("thresholds", {})
+        config["thresholds"][update.pv_name] = entry
     return {"status": "ok", "thresholds": config["thresholds"]}
 
 
 @router.delete("/thresholds/{pv_name:path}")
 async def delete_threshold(pv_name: str):
     """remove a certain PV's threshold"""
-    config = load_config()
-    config.get("thresholds", {}).pop(pv_name, None)
-    save_config(config)
+    with edit_config() as config:
+        config.get("thresholds", {}).pop(pv_name, None)
     return {"status": "ok"}
