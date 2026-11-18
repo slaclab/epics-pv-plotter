@@ -54,6 +54,32 @@ cp config.example.json config.json
 docker compose up --build -d
 ```
 
+### Updating existing Raspberry Pi installations through beamline relays
+
+Run the native deployment script on each intermediate server, from its current
+`~/Documents/epics-pv-plotter` checkout. It copies only `calc/`, `routers/`,
+`src/`, and `epics_fastapi_gateway.py` to the existing Pi checkout at
+`~/Documents/epics-pv-plotter`, then restarts the existing gateway and
+frontend systemd services. It does not use Docker, install dependencies, or
+overwrite `config.json`.
+
+On each intermediate server, configure SSH key access to its Pi and create a
+local inventory with the Pi's hostname and username:
+```bash
+cd ~/Documents/epics-pv-plotter
+cp scripts/beamline-pis.inventory.example scripts/beamline-pis.inventory
+```
+Edit the tab-separated row for that relay's Pi, then deploy just that beamline:
+```bash
+bash scripts/deploy-beamline-pis.sh --target BL22
+```
+Use `--all` only if that intermediate server can reach every Pi in its
+inventory. The Pi must have `rsync` installed, and the SSH user must have
+passwordless sudo to restart the existing systemd units. By default, the
+script restarts `epics-ws-gateway.service` and `epics-pv-frontend.service`;
+use `--frontend-service none` if that Pi serves the frontend another way.
+Repeat on each relay using the latest checkout there.
+
 ## Prerequisites
 
 ### Required Software
