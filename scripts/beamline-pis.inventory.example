@@ -1,0 +1,10 @@
+# Tab-separated columns: beamline, pi_host, pi_user
+# Run the deployment script on the intermediate server for this beamline.
+# Keep only the Pi(s) reachable from that server active in its local inventory.
+# Replace these examples with the actual hostnames and usernames, then save
+# as scripts/beamline-pis.inventory (which is gitignored).
+#BL22	bl22-pi	b_bluesky
+#BL43	bl43-pi	b_bluesky
+#BL93	bl93-pi	b_bluesky
+#BL10-2	bl10-2-pi	b_bluesky
+#BL11-2	bl11-2-pi	b_bluesky
