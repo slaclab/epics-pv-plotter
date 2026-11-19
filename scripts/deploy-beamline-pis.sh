@@ -9,6 +9,7 @@ REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 INVENTORY="$SCRIPT_DIR/beamline-pis.inventory"
 GATEWAY_SERVICE="epics-ws-gateway.service"
 FRONTEND_SERVICE="epics-pv-frontend.service"
+NGINX_FRONTEND=0
 DEPLOY_ALL=0
 declare -a SELECTED_BEAMLINES=()
 
@@ -25,6 +26,8 @@ Options:
                             (default: epics-ws-gateway.service)
   --frontend-service NAME  Frontend systemd unit to restart, or "none"
                             (default: epics-pv-frontend.service)
+  --nginx-frontend          Build and publish dist/ to nginx's web root;
+                            use with --frontend-service none
   --target NAME             Deploy to one beamline; may be repeated
   --all                     Deploy to every beamline in the inventory
   -h, --help                Show this help
@@ -57,6 +60,10 @@ while (($#)); do
             FRONTEND_SERVICE="$2"
             shift 2
             ;;
+        --nginx-frontend)
+            NGINX_FRONTEND=1
+            shift
+            ;;
         --target)
             (($# >= 2)) || fail "--target requires a beamline name"
             SELECTED_BEAMLINES+=("$2")
@@ -80,6 +87,9 @@ done
 [[ "$GATEWAY_SERVICE" =~ ^[A-Za-z0-9_.@:-]+$ ]] || fail "invalid gateway service name"
 [[ "$FRONTEND_SERVICE" == "none" || "$FRONTEND_SERVICE" =~ ^[A-Za-z0-9_.@:-]+$ ]] ||
     fail "invalid frontend service name"
+if ((NGINX_FRONTEND == 1)) && [[ "$FRONTEND_SERVICE" != "none" ]]; then
+    fail "--nginx-frontend requires --frontend-service none"
+fi
 if ((DEPLOY_ALL == 1 && ${#SELECTED_BEAMLINES[@]} > 0)); then
     fail "use either --all or --target, not both"
 fi
@@ -94,6 +104,12 @@ for path in calc routers src; do
 done
 [[ -f "$REPO_DIR/epics_fastapi_gateway.py" ]] ||
     fail "missing source file: $REPO_DIR/epics_fastapi_gateway.py"
+if ((NGINX_FRONTEND == 1)); then
+    command -v npm >/dev/null || fail "npm is required to build the nginx frontend"
+    printf 'Building frontend for nginx...\n'
+    npm --prefix "$REPO_DIR" run build || fail "frontend build failed"
+    [[ -d "$REPO_DIR/dist" ]] || fail "frontend build did not create dist/"
+fi
 
 declare -a BEAMLINES=() PI_HOSTS=() PI_USERS=()
 while IFS=$'\t' read -r beamline pi_host pi_user extra || [[ -n "${beamline:-}${pi_host:-}${pi_user:-}${extra:-}" ]]; do
@@ -142,11 +158,15 @@ deploy_one() {
     local host="${PI_HOSTS[$index]}"
     local user="${PI_USERS[$index]}"
     local target="${user}@${host}"
+    local remote_stage=".epics-pv-plotter-dist-$$-$index"
+    local remote_preflight="test -d \"\$HOME/$REMOTE_APP_PATH\" && command -v rsync >/dev/null"
 
     printf '\nDeploying %s to %s from this relay...\n' "$beamline" "$target"
-    if ! ssh "${SSH_OPTS[@]}" "$target" \
-        "test -d \"\$HOME/$REMOTE_APP_PATH\" && command -v rsync >/dev/null && sudo -n true"; then
-        printf 'Preflight failed for %s: check the app directory, rsync, SSH, and passwordless sudo\n' "$beamline" >&2
+    if ((NGINX_FRONTEND == 1)); then
+        remote_preflight+=" && test -d /var/www/epics-pv-plotter"
+    fi
+    if ! ssh "${SSH_OPTS[@]}" "$target" "$remote_preflight"; then
+        printf 'Preflight failed for %s: check the app directory, rsync, SSH, and nginx web root if applicable\n' "$beamline" >&2
         return 1
     fi
 
@@ -167,13 +187,40 @@ deploy_one() {
         return 1
     fi
 
-    local restart_units="$GATEWAY_SERVICE"
-    if [[ "$FRONTEND_SERVICE" != "none" ]]; then
-        restart_units+=" $FRONTEND_SERVICE"
+    if ((NGINX_FRONTEND == 1)); then
+        if ! rsync -a --delete -e "$RSYNC_RSH" \
+            "$REPO_DIR/dist/" "$target:$REMOTE_APP_PATH/$remote_stage/"; then
+            printf 'Failed to copy frontend build to %s\n' "$beamline" >&2
+            return 1
+        fi
+        if ! ssh "${SSH_OPTS[@]}" "$target" \
+            "sudo -n rsync -a --delete -- \"\$HOME/$REMOTE_APP_PATH/$remote_stage/\" /var/www/epics-pv-plotter/"; then
+            printf 'Source copied, but nginx frontend publication failed on %s\n' "$beamline" >&2
+            return 1
+        fi
+        if ! ssh "${SSH_OPTS[@]}" "$target" \
+            "rm -rf -- \"\$HOME/$REMOTE_APP_PATH/$remote_stage\""; then
+            printf 'Frontend published, but staging cleanup failed on %s\n' "$beamline" >&2
+            return 1
+        fi
     fi
-    if ! ssh "${SSH_OPTS[@]}" "$target" \
-        "sudo -n systemctl restart $restart_units && sudo -n systemctl is-active $restart_units"; then
-        printf 'Source copied, but service restart/health check failed on %s\n' "$beamline" >&2
+
+    local -a restart_units=("$GATEWAY_SERVICE")
+    if [[ "$FRONTEND_SERVICE" != "none" ]]; then
+        restart_units+=("$FRONTEND_SERVICE")
+    fi
+    local remote_commands=""
+    for unit in "${restart_units[@]}"; do
+        remote_commands+="sudo -n systemctl restart '$unit' || exit; "
+    done
+    for unit in "${restart_units[@]}"; do
+        remote_commands+="systemctl is-active '$unit' || exit; "
+    done
+    if ((NGINX_FRONTEND == 1)); then
+        remote_commands+="systemctl is-active nginx || exit; "
+    fi
+    if ! ssh "${SSH_OPTS[@]}" "$target" "$remote_commands"; then
+        printf 'Deployment actions completed, but a service health check failed on %s\n' "$beamline" >&2
         return 1
     fi
 

@@ -60,7 +60,8 @@ Run the native deployment script on each intermediate server, from its current
 `~/Documents/epics-pv-plotter` checkout. It copies only `calc/`, `routers/`,
 `src/`, and `epics_fastapi_gateway.py` to the existing Pi checkout at
 `~/Documents/epics-pv-plotter`, then restarts the existing gateway and
-frontend systemd services. It does not use Docker, install dependencies, or
+frontend systemd services. It verifies each restarted service is active before
+reporting success. It does not use Docker, install dependencies on the Pi, or
 overwrite `config.json`.
 
 On each intermediate server, configure SSH key access to its Pi and create a
@@ -75,10 +76,21 @@ bash scripts/deploy-beamline-pis.sh --target BL22
 ```
 Use `--all` only if that intermediate server can reach every Pi in its
 inventory. The Pi must have `rsync` installed, and the SSH user must have
-passwordless sudo to restart the existing systemd units. By default, the
-script restarts `epics-ws-gateway.service` and `epics-pv-frontend.service`;
-use `--frontend-service none` if that Pi serves the frontend another way.
-Repeat on each relay using the latest checkout there.
+passwordless sudo for the systemd restart commands. By default, the script
+restarts `epics-ws-gateway.service` and `epics-pv-frontend.service`.
+
+For a Pi serving the production build through nginx, use:
+```bash
+bash scripts/deploy-beamline-pis.sh --target BL22 \
+  --frontend-service none --nginx-frontend
+```
+This builds the frontend on the relay, publishes it to the existing
+`/var/www/epics-pv-plotter` web root, and verifies that both the gateway and
+nginx are active. The Pi's SSH user needs passwordless sudo for the `rsync`
+publication command. Use `--frontend-service none` without
+`--nginx-frontend` only when the frontend is served directly from the deployed
+checkout by another mechanism. Repeat on each relay using the latest checkout
+there.
 
 ## Prerequisites
 
