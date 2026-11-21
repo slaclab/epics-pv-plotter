@@ -25,6 +25,11 @@ export const usePlotStore = create(
       //PVs explicitly added to the Live PV Values list
       livePVNames: [],
 
+      activeConfigFile: "config.json",
+      setActiveConfigFile: (filename) => {
+        set({ activeConfigFile: filename });
+      },
+
       // Time synchronization settings
       timeSyncEnabled: true,
       globalTimeWindow: 60,
@@ -326,6 +331,7 @@ export const usePlotStore = create(
       partialize: (state) => ({
         plots: state.plots,
         livePVNames: state.livePVNames,
+        activeConfigFile: state.activeConfigFile,
         //timeSyncEnabled: state.timeSyncEnabled,
         globalTimeWindow: state.globalTimeWindow,
       }),

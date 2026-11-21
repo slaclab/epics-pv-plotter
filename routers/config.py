@@ -1,7 +1,7 @@
 # routers/config.py
 """
 Configuration API router - handles shared aliases and layouts.
-Stored in config.json so all browsers share the same settings.
+The active configuration is stored in configs/config.json.
 """
 
 import copy
@@ -21,8 +21,8 @@ log = logging.getLogger(__name__)
 # create router, setup prefix and tags
 router = APIRouter(prefix="/api", tags=["config"])
 
-# set up the files's path and file name
-CONFIG_FILE = Path(__file__).parent.parent / "config.json"
+# set up the files' path and file name
+CONFIG_FILE = Path(__file__).parent.parent / "configs" / "config.json"
 
 DEFAULT_CONFIG = {
     "aliases": {},
@@ -37,34 +37,36 @@ DEFAULT_CONFIG = {
 }
 
 
-def load_config() -> dict:
+def load_config(config_file: Path | None = None) -> dict:
+    config_file = config_file or CONFIG_FILE
     # deepcopy: callers mutate the result, which must not change the defaults
-    if not CONFIG_FILE.exists():
+    if not config_file.exists():
         return copy.deepcopy(DEFAULT_CONFIG)
     try:
         # open config file and load the json data
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError) as e:
         log.warning(f"Failed to read config, using default: {e}")
         return copy.deepcopy(DEFAULT_CONFIG)
 
 
-def save_config(config: dict) -> None:
-    tmp = CONFIG_FILE.with_suffix(".json.tmp")
+def save_config(config: dict, config_file: Path | None = None) -> None:
+    config_file = config_file or CONFIG_FILE
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = config_file.with_suffix(".json.tmp")
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
 
         try:
-            tmp.replace(CONFIG_FILE)   # replace the old configuration file
+            tmp.replace(config_file)   # replace the old configuration file
         except OSError as e:
             if e.errno != errno.EBUSY:
                 raise
-            # CONFIG_FILE is a bind-mounted single file (e.g. Docker's
-            # `volumes: - ./config.json:/app/config.json`), which can't be
-            # atomically replaced via rename - write in place instead.
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            # A directly bind-mounted config file can't be atomically replaced
+            # via rename, so write in place instead.
+            with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
             tmp.unlink(missing_ok=True)
     except IOError as e:
@@ -73,7 +75,7 @@ def save_config(config: dict) -> None:
 
 
 @contextmanager
-def config_lock() -> Iterator[None]:
+def config_lock(config_file: Path | None = None) -> Iterator[None]:
     """
     Exclusive lock on config.json across processes (e.g. several uvicorn
     workers). Every writer must hold it for its whole read-modify-write so
@@ -82,7 +84,9 @@ def config_lock() -> Iterator[None]:
     Never `await` while holding it: the flock call blocks, and a second
     coroutine in the same process waiting on it would stall the event loop.
     """
-    lock_path = CONFIG_FILE.with_suffix(".json.lock")
+    config_file = config_file or CONFIG_FILE
+    lock_path = config_file.with_suffix(".json.lock")
+    config_file.parent.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "w", encoding="utf-8") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
@@ -92,7 +96,9 @@ def config_lock() -> Iterator[None]:
 
 
 @contextmanager
-def edit_config() -> Iterator[dict]:
+def edit_config(
+    config_file: Path | None = None, *, strict: bool = False
+) -> Iterator[dict]:
     """
     Locked read-modify-write of config.json:
 
@@ -102,10 +108,14 @@ def edit_config() -> Iterator[dict]:
     The config is saved when the block ends normally; if the block raises
     (e.g. HTTPException), nothing is written.
     """
-    with config_lock():
-        config = load_config()
+    config_file = config_file or CONFIG_FILE
+    with config_lock(config_file):
+        if strict:
+            config = _read_config_file(config_file)
+        else:
+            config = load_config(config_file)
         yield config
-        save_config(config)
+        save_config(config, config_file)
 
 
 # ---------- complete setup of the router ----------
@@ -114,6 +124,99 @@ def edit_config() -> Iterator[dict]:
 async def get_config():
     """get the complete configuration"""
     return load_config()
+
+
+def _preset_path(filename: str) -> Path:
+    if (
+        not filename.endswith(".json")
+        or filename != Path(filename).name
+        or "\\" in filename
+    ):
+        raise HTTPException(status_code=400, detail="Invalid configuration filename")
+
+    preset_path = CONFIG_FILE.parent / filename
+    config_dir = CONFIG_FILE.parent.resolve()
+    if preset_path.resolve().parent != config_dir or not preset_path.is_file():
+        raise HTTPException(status_code=404, detail="Configuration not found")
+    return preset_path
+
+
+def _read_config_file(config_file: Path) -> dict:
+    try:
+        with config_file.open("r", encoding="utf-8") as source:
+            config = json.load(source)
+    except json.JSONDecodeError as error:
+        log.error("Invalid JSON in configuration %s: %s", config_file.name, error)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Configuration {config_file.name} contains invalid JSON",
+        ) from error
+    except OSError as error:
+        log.error("Failed to read configuration %s: %s", config_file.name, error)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to read configuration {config_file.name}"
+        ) from error
+    if not isinstance(config, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Configuration {config_file.name} must contain a JSON object",
+        )
+    return config
+
+
+def resolve_config_file(filename: str | None = None) -> Path:
+    return CONFIG_FILE if filename is None else _preset_path(filename)
+
+
+@router.get("/config-presets")
+async def list_config_presets():
+    """list JSON configuration files available in the configs directory"""
+    config_dir = CONFIG_FILE.parent
+    if not config_dir.exists():
+        return {"files": []}
+
+    files = []
+    for path in sorted(config_dir.glob("*.json")):
+        if path.is_file() and path.resolve().parent == config_dir.resolve():
+            files.append(path.name)
+    return {"files": files}
+
+
+@router.get("/config-presets/{filename}")
+async def get_config_preset(filename: str):
+    """read a named configuration preset without changing the active config"""
+    return _read_config_file(_preset_path(filename))
+
+
+@router.patch("/config-presets/{filename}")
+async def update_config_preset(filename: str, updates: Dict[str, Any]):
+    """update selected configuration sections without replacing other sections"""
+    allowed_sections = {
+        "aliases",
+        "egus",
+        "thresholds",
+        "value_formats",
+        "layouts",
+    }
+    if not updates or updates.keys() - allowed_sections:
+        raise HTTPException(status_code=422, detail="Invalid configuration sections")
+    if any(not isinstance(value, dict) for value in updates.values()):
+        raise HTTPException(
+            status_code=422, detail="Configuration sections must be JSON objects"
+        )
+
+    preset_path = _preset_path(filename)
+    with edit_config(preset_path, strict=True) as config:
+        for section, values in updates.items():
+            if section == "layouts":
+                layouts = config.get("layouts")
+                if not isinstance(layouts, dict):
+                    layouts = {}
+                    config["layouts"] = layouts
+                layouts.update(values)
+            else:
+                config[section] = values
+    return {"status": "ok"}
 
 
 @router.post("/config")

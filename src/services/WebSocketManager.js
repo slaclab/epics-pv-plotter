@@ -3,6 +3,7 @@
 
 import { WS_CONFIG } from "../utils/constants";
 import { isEnergyPV, encoderOf } from "../utils/energy";
+import { usePlotStore } from "../stores/usePlotStore";
 
 export class PVWebSocket {
   constructor(pvName, onData, onError, onConnect, onClose) {
@@ -33,13 +34,16 @@ export class PVWebSocket {
       // WS_CONFIG.BASE_URL (IP + port) is defined in utils/constants.js
       // encodeURIComponent: safely encode PV name (colons, etc.) into the URL.
       // Energy PVs are calculated by the gateway from the encoder (routers/energy.py).
-      // No encoder in the URL -> the gateway uses encoder_pv from /api/energy-config.
+      // The gateway reads energy parameters from the active configuration file.
       let wsUrl = `${WS_CONFIG.BASE_URL}/ws?pv=${encodeURIComponent(this.pvName)}`;
       if (isEnergyPV(this.pvName)) {
+        const configFile =
+          usePlotStore.getState().activeConfigFile || "config.json";
+        const configParam = `config_file=${encodeURIComponent(configFile)}`;
         const encoder = encoderOf(this.pvName);
         wsUrl = encoder
-          ? `${WS_CONFIG.BASE_URL}/ws/energy?encoder=${encodeURIComponent(encoder)}`
-          : `${WS_CONFIG.BASE_URL}/ws/energy`;
+          ? `${WS_CONFIG.BASE_URL}/ws/energy?encoder=${encodeURIComponent(encoder)}&${configParam}`
+          : `${WS_CONFIG.BASE_URL}/ws/energy?${configParam}`;
       }
 
       console.log(`🔗 Connecting to: ${wsUrl}`);

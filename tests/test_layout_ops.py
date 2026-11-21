@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from routers import config as config_router  # noqa: E402
+from routers import energy as energy_router  # noqa: E402
 from routers import layout_ops  # noqa: E402
 
 
@@ -28,6 +29,7 @@ def client(tmp_path, monkeypatch):
     app = FastAPI()
     app.include_router(config_router.router)
     app.include_router(layout_ops.router)
+    app.include_router(energy_router.router)
     return TestClient(app)
 
 
@@ -144,6 +146,97 @@ def test_missing_config_does_not_mutate_defaults(tmp_path, monkeypatch):
     with config_router.edit_config() as config:
         config["aliases"]["A"] = "I0"
     assert config_router.DEFAULT_CONFIG["aliases"] == {}
+
+
+def test_config_presets_can_be_listed_and_loaded_without_changing_default(client):
+    preset = config_router.CONFIG_FILE.parent / "config1.json"
+    preset.write_text(json.dumps({
+        "layouts": {
+            "default": {
+                "plots": [{"id": 2, "pvNames": ["PRESET:PV"]}],
+                "livePVNames": [],
+                "globalTimeWindow": 120,
+            }
+        }
+    }))
+
+    response = client.get("/api/config-presets")
+    assert response.status_code == 200
+    assert response.json()["files"] == ["config.json", "config1.json"]
+
+    response = client.get("/api/config-presets/config1.json")
+    assert response.status_code == 200
+    assert response.json()["layouts"]["default"]["plots"][0]["pvNames"] == [
+        "PRESET:PV"
+    ]
+    assert client.get("/api/config").json()["layouts"]["default"]["plots"] == []
+
+
+def test_missing_config_preset_returns_404(client):
+    assert client.get("/api/config-presets/not-found.json").status_code == 404
+
+
+def test_preset_updates_only_requested_sections(client):
+    preset = config_router.CONFIG_FILE.parent / "config1.json"
+    preset.write_text(json.dumps({
+        "aliases": {"A": "old"},
+        "layouts": {"default": {"plots": [{"id": 1, "pvNames": ["A"]}]}},
+    }))
+
+    response = client.patch(
+        "/api/config-presets/config1.json",
+        json={"aliases": {"A": "new"}, "egus": {"A": "V"}},
+    )
+    assert response.status_code == 200
+    preset_config = client.get("/api/config-presets/config1.json").json()
+    assert preset_config["aliases"] == {"A": "new"}
+    assert preset_config["egus"] == {"A": "V"}
+    assert preset_config["layouts"]["default"]["plots"][0]["pvNames"] == ["A"]
+    assert client.get("/api/config").json()["layouts"]["default"]["plots"] == []
+
+
+def test_preset_updates_reject_unknown_sections(client):
+    (config_router.CONFIG_FILE.parent / "config1.json").write_text("{}")
+    response = client.patch(
+        "/api/config-presets/config1.json",
+        json={"unexpected": {}},
+    )
+    assert response.status_code == 422
+
+
+def test_energy_config_reads_from_requested_preset(client):
+    preset = config_router.CONFIG_FILE.parent / "config1.json"
+    preset.write_text(json.dumps({
+        "energy": {
+            "encoder_pv": "BL22:TEST:ENCODER.REP",
+            "d_spacing_pv": "BL22:TEST:D",
+            "offset_pv": "BL22:TEST:OFFSET",
+        }
+    }))
+
+    response = client.get(
+        "/api/energy-config", params={"config_file": "config1.json"}
+    )
+    assert response.status_code == 200
+    assert response.json()["encoder_pv"] == "BL22:TEST:ENCODER.REP"
+
+    response = client.post(
+        "/api/energy-config",
+        params={"config_file": "config1.json"},
+        json={
+            "encoder_pv": "BL22:TEST:NEW_ENCODER",
+            "d_spacing_pv": "BL22:TEST:D2",
+            "offset_pv": "BL22:TEST:OFFSET2",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["energy"]["encoder_pv"] == "BL22:TEST:NEW_ENCODER.REP"
+    assert client.get(
+        "/api/energy-config", params={"config_file": "config1.json"}
+    ).json()["d_spacing_pv"] == "BL22:TEST:D2"
+    assert client.get("/api/energy-config").json()["encoder_pv"] != (
+        "BL22:TEST:NEW_ENCODER.REP"
+    )
 
 
 # ---------- PV names containing "/" ----------

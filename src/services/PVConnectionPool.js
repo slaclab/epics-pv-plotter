@@ -1,10 +1,45 @@
 import { PVWebSocket } from "./WebSocketManager";
 import { useLiveValueStore } from "../stores/useLiveValueStore";
+import { isEnergyPV } from "../utils/energy";
 
 class PVConnectionPool {
   constructor() {
     // pvName -> { ws: PVWebSocket, subscribers: Set<Subscriber> }
     this.pool = new Map();
+  }
+
+  createConnection(pvName, subscribers) {
+    return new PVWebSocket(
+      pvName,
+      (value, timestamp) => {
+        useLiveValueStore
+          .getState()
+          .updateLatestValue(pvName, value, timestamp);
+
+        subscribers.forEach((subscriber) => {
+          subscriber.onData?.(value, timestamp);
+        });
+      },
+      (error) => {
+        useLiveValueStore.getState().removeLatestValue(pvName);
+
+        subscribers.forEach((subscriber) => {
+          subscriber.onError?.(error);
+        });
+      },
+      () => {
+        subscribers.forEach((subscriber) => {
+          subscriber.onConnect?.();
+        });
+      },
+      () => {
+        useLiveValueStore.getState().removeLatestValue(pvName);
+
+        subscribers.forEach((subscriber) => {
+          subscriber.onDisconnect?.();
+        });
+      },
+    );
   }
 
   subscribe(pvName, callbacks = {}) {
@@ -16,61 +51,7 @@ class PVConnectionPool {
       );
 
       const subscribers = new Set();
-
-      const ws = new PVWebSocket(
-        pvName,
-
-        // Update the latest-value store once per WebSocket message,
-        // then distribute the same sample to every subscriber.
-        (value, timestamp) => {
-          useLiveValueStore
-            .getState()
-            .updateLatestValue(
-              pvName,
-              value,
-              timestamp
-            );
-
-          subscribers.forEach((subscriber) => {
-            subscriber.onData?.(
-              value,
-              timestamp
-            );
-          });
-        },
-
-        // Distribute connection errors to all subscribers.
-        // The cached value can no longer be trusted, so drop it
-        // until a fresh sample arrives.
-        (error) => {
-          useLiveValueStore
-            .getState()
-            .removeLatestValue(pvName);
-
-          subscribers.forEach((subscriber) => {
-            subscriber.onError?.(error);
-          });
-        },
-
-        // Notify all subscribers when the shared connection opens.
-        () => {
-          subscribers.forEach((subscriber) => {
-            subscriber.onConnect?.();
-          });
-        },
-
-        // Unexpected close: drop the cached value and notify
-        // subscribers while the connection reconnects.
-        () => {
-          useLiveValueStore
-            .getState()
-            .removeLatestValue(pvName);
-
-          subscribers.forEach((subscriber) => {
-            subscriber.onDisconnect?.();
-          });
-        }
-      );
+      const ws = this.createConnection(pvName, subscribers);
 
       ws.connect();
 
@@ -131,6 +112,17 @@ class PVConnectionPool {
         );
       }
     };
+  }
+
+  reconnectEnergyConnections() {
+    this.pool.forEach((entry, pvName) => {
+      if (!isEnergyPV(pvName)) return;
+
+      entry.ws.disconnect();
+      useLiveValueStore.getState().removeLatestValue(pvName);
+      entry.ws = this.createConnection(pvName, entry.subscribers);
+      entry.ws.connect();
+    });
   }
 
   getActiveConnectionCount() {

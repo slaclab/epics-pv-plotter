@@ -30,7 +30,11 @@ import { API_BASE } from "../utils/constants";
 const RETRY_DELAY_MS = 3000;
 
 export function useConfigSync() {
+  const activeConfigFile = usePlotStore((state) => state.activeConfigFile);
+
   useEffect(() => {
+    if (activeConfigFile !== "config.json") return undefined;
+
     let latest = null;
     let applied = null;
     let reloading = false;
@@ -108,5 +112,5 @@ export function useConfigSync() {
       clearTimeout(retryTimer);
       source.close();
     };
-  }, []);
+  }, [activeConfigFile]);
 }

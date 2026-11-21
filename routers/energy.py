@@ -16,7 +16,7 @@ real EPICS PV (MONO_CALC marks it as calculated): the frontend connects to
 and streams the energy back in the same JSON format as a normal PV on /ws.
 The math itself lives in calc/energy.py.
 
-The encoder PV and store PV names are shared settings, kept in config.json
+The encoder PV and store PV names are kept in the active configuration file
 under "energy" next to aliases/EGUs, and edited via /api/energy-config.
 """
 
@@ -29,7 +29,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, WebSocket
 from pydantic import BaseModel, field_validator
 
 from calc.energy import EnergyCalcError, encoder_angle_deg, bragg_energy_ev
-from routers.config import edit_config, load_config
+from routers.config import edit_config, load_config, resolve_config_file
 
 log = logging.getLogger(__name__)
 
@@ -57,8 +57,9 @@ active_energy_streams = 0
 
 # ---------- settings (stored in config.json like aliases) ----------
 
-def get_energy_config() -> dict:
-    stored = load_config().get("energy", {})
+def get_energy_config(config_file: str | None = None) -> dict:
+    config_path = resolve_config_file(config_file)
+    stored = load_config(config_path).get("energy", {})
     if not isinstance(stored, dict):
         stored = {}
     # Only known keys, so settings removed from the app (the old
@@ -87,15 +88,18 @@ class EnergyConfigUpdate(BaseModel):
 
 
 @router.get("/api/energy-config")
-async def read_energy_config():
+async def read_energy_config(config_file: str | None = Query(None)):
     """get the energy calculation settings (encoder and store PV names)"""
-    return get_energy_config()
+    return get_energy_config(config_file)
 
 
 @router.post("/api/energy-config")
-async def update_energy_config(update: EnergyConfigUpdate):
+async def update_energy_config(
+    update: EnergyConfigUpdate, config_file: str | None = Query(None)
+):
     """save the energy calculation settings"""
-    with edit_config() as config:
+    config_path = resolve_config_file(config_file)
+    with edit_config(config_path, strict=config_file is not None) as config:
         config["energy"] = update.model_dump()
     return {"status": "ok", "energy": config["energy"]}
 
@@ -183,9 +187,10 @@ async def read_energy(
         description="Encoder PV (.REP is added if no field is given); "
                     "default: encoder_pv from /api/energy-config",
     ),
+    config_file: str | None = Query(None),
 ):
     """read the input PVs once and return the calculated energy (eV)"""
-    config = get_energy_config()
+    config = get_energy_config(config_file)
     encoder = encoder or config["encoder_pv"]
     input_names = input_pv_names(encoder, config)
     names = list(input_names.values())
@@ -216,12 +221,13 @@ async def energy_websocket(
         description="Encoder PV, e.g. BL22:SCAN:MASTER:MOTOR1.REP; "
                     "default: encoder_pv from /api/energy-config",
     ),
+    config_file: str | None = Query(None),
 ):
     global active_energy_streams
 
     await websocket.accept()
 
-    config = get_energy_config()
+    config = get_energy_config(config_file)
     encoder = encoder or config["encoder_pv"]
     stream_name = energy_pv_name(encoder)
     input_names = input_pv_names(encoder, config)

@@ -40,13 +40,16 @@ reach them, copy `.env.example` to `.env` and set `EPICS_CA_ADDR_LIST`
 (and `EPICS_CA_AUTO_ADDR_LIST=NO`) to the IOC addresses directly.
 
 ### Persisting configuration
-`config.json` (PV aliases, EGUs, thresholds, saved layouts) is bind-mounted
-into the backend container, so it persists across rebuilds/restarts and can be
-edited directly on the host. It holds user-saved settings, so it is not tracked
-by git - create it from the template before the first `docker compose up`
-(otherwise Docker creates a directory named `config.json` in its place):
+`configs/` is bind-mounted into the backend container, so configuration files
+persist across rebuilds/restarts and can be edited directly on the host.
+`configs/config.json` is the default configuration; additional JSON files in
+that folder appear as selectable presets in the plotter. Loading a preset makes
+it the active save target for Config Page settings, energy settings, and saved
+plot layouts. Create the default from the template before the first
+`docker compose up`:
 ```bash
-cp config.example.json config.json
+mkdir -p configs
+cp config.example.json configs/config.json
 ```
 
 ### Updating after a code change
