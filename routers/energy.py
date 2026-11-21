@@ -29,7 +29,12 @@ from fastapi import APIRouter, HTTPException, Query, Request, WebSocket
 from pydantic import BaseModel, field_validator
 
 from calc.energy import EnergyCalcError, encoder_angle_deg, bragg_energy_ev
-from routers.config import edit_config, load_config, resolve_config_file
+from routers.config import (
+    edit_config,
+    load_config,
+    resolve_config_file,
+    resolve_config_file as resolve_validated_config_file,
+)
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +61,14 @@ active_energy_streams = 0
 
 
 # ---------- settings (stored in config.json like aliases) ----------
+
+def _validated_config_filename(config_file: str | None) -> str | None:
+    if config_file is None:
+        return None
+    # Force validation at the API boundary (raises HTTPException on invalid input).
+    resolve_validated_config_file(config_file)
+    return config_file
+
 
 def get_energy_config(config_file: str | None = None) -> dict:
     config_path = resolve_config_file(config_file)
@@ -90,6 +103,7 @@ class EnergyConfigUpdate(BaseModel):
 @router.get("/api/energy-config")
 async def read_energy_config(config_file: str | None = Query(None)):
     """get the energy calculation settings (encoder and store PV names)"""
+    config_file = _validated_config_filename(config_file)
     return get_energy_config(config_file)
 
 
@@ -98,6 +112,7 @@ async def update_energy_config(
     update: EnergyConfigUpdate, config_file: str | None = Query(None)
 ):
     """save the energy calculation settings"""
+    config_file = _validated_config_filename(config_file)
     config_path = resolve_config_file(config_file)
     with edit_config(config_path, strict=config_file is not None) as config:
         config["energy"] = update.model_dump()
