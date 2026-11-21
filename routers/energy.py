@@ -205,6 +205,7 @@ async def read_energy(
     config_file: str | None = Query(None),
 ):
     """read the input PVs once and return the calculated energy (eV)"""
+    config_file = _validated_config_filename(config_file)
     config = get_energy_config(config_file)
     encoder = encoder or config["encoder_pv"]
     input_names = input_pv_names(encoder, config)
@@ -242,6 +243,7 @@ async def energy_websocket(
 
     await websocket.accept()
 
+    config_file = _validated_config_filename(config_file)
     config = get_energy_config(config_file)
     encoder = encoder or config["encoder_pv"]
     stream_name = energy_pv_name(encoder)

@@ -9,6 +9,7 @@ import errno
 import fcntl
 import json
 import logging
+import re
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Any, Iterator, Literal
@@ -134,8 +135,14 @@ async def get_config():
     """get the complete configuration"""
     return load_config()
 
+_SAFE_CONFIG_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.json$")
+
+
 def _preset_path(filename: str) -> Path:
     if not filename:
+        raise HTTPException(status_code=400, detail="Invalid configuration filename")
+
+    if not _SAFE_CONFIG_FILENAME.fullmatch(filename):
         raise HTTPException(status_code=400, detail="Invalid configuration filename")
 
     candidate = Path(filename)
