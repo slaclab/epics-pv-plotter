@@ -95,7 +95,6 @@ def config_lock(config_file: Path | None = None) -> Iterator[None]:
     Never `await` while holding it: the flock call blocks, and a second
     coroutine in the same process waiting on it would stall the event loop.
     """
-    config_file = config_file or CONFIG_FILE
     lock_path = config_file.with_suffix(".json.lock")
     config_file.parent.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "w", encoding="utf-8") as lock:
