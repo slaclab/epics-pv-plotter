@@ -37,8 +37,16 @@ DEFAULT_CONFIG = {
 }
 
 
+def _ensure_config_path(config_file: Path) -> Path:
+    config_dir = CONFIG_FILE.parent.resolve()
+    resolved = config_file.resolve()
+    if resolved.parent != config_dir:
+        raise HTTPException(status_code=400, detail="Invalid configuration path")
+    return resolved
+
+
 def load_config(config_file: Path | None = None) -> dict:
-    config_file = config_file or CONFIG_FILE
+    config_file = _ensure_config_path(config_file or CONFIG_FILE)
     # deepcopy: callers mutate the result, which must not change the defaults
     if not config_file.exists():
         return copy.deepcopy(DEFAULT_CONFIG)
@@ -52,7 +60,7 @@ def load_config(config_file: Path | None = None) -> dict:
 
 
 def save_config(config: dict, config_file: Path | None = None) -> None:
-    config_file = config_file or CONFIG_FILE
+    config_file = _ensure_config_path(config_file or CONFIG_FILE)
     config_file.parent.mkdir(parents=True, exist_ok=True)
     tmp = config_file.with_suffix(".json.tmp")
     try:
@@ -76,6 +84,7 @@ def save_config(config: dict, config_file: Path | None = None) -> None:
 
 @contextmanager
 def config_lock(config_file: Path | None = None) -> Iterator[None]:
+    config_file = _ensure_config_path(config_file or CONFIG_FILE)
     """
     Exclusive lock on config.json across processes (e.g. several uvicorn
     workers). Every writer must hold it for its whole read-modify-write so
@@ -108,7 +117,7 @@ def edit_config(
     The config is saved when the block ends normally; if the block raises
     (e.g. HTTPException), nothing is written.
     """
-    config_file = config_file or CONFIG_FILE
+    config_file = _ensure_config_path(config_file or CONFIG_FILE)
     with config_lock(config_file):
         if strict:
             config = _read_config_file(config_file)
@@ -146,6 +155,7 @@ def _preset_path(filename: str) -> Path:
 
 
 def _read_config_file(config_file: Path) -> dict:
+    config_file = _ensure_config_path(config_file)
     try:
         with config_file.open("r", encoding="utf-8") as source:
             config = json.load(source)
