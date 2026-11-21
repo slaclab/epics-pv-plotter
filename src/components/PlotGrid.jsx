@@ -95,12 +95,9 @@ export default function PlotGrid({ onLayoutLoaded }) {
       }
 
       onLayoutLoaded?.(layout);
-      const previousConfig = usePlotStore.getState().activeConfigFile;
       loadLayout(layout);
       setActiveConfigFile(filename);
-      if (previousConfig !== filename) {
-        pvConnectionPool.reconnectEnergyConnections();
-      }
+      pvConnectionPool.reconnectEnergyConnections();
       bumpSettingsRevision();
     } catch (error) {
       console.error(`Failed to load configuration ${filename}:`, error);
