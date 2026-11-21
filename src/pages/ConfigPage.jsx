@@ -1,9 +1,31 @@
 // src/pages/ConfigPage.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePlotStore } from "../stores/usePlotStore";
-import { API_BASE } from "../utils/constants";   
-// Relative path: nginx proxies /api to the backend on the same origin.
+import { configPresetUrl, energyConfigUrl } from "../utils/configApi";
+import { DEFAULT_ENERGY_CONFIG } from "../utils/energy";
+
+function objectOrEmpty(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
+}
+
+function diffSettings(previous, current) {
+  const changes = {};
+  const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
+  keys.forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(current, key)) {
+      changes[key] = null;
+    } else if (
+      !Object.prototype.hasOwnProperty.call(previous, key) ||
+      JSON.stringify(previous[key]) !== JSON.stringify(current[key])
+    ) {
+      changes[key] = current[key];
+    }
+  });
+  return changes;
+}
 
 function ConfigPage() {
   const navigate = useNavigate();
@@ -12,6 +34,10 @@ function ConfigPage() {
   const plots = usePlotStore((state) => state.plots);
   const livePVNames = usePlotStore((state) => state.livePVNames);
   const globalTimeWindow = usePlotStore((state) => state.globalTimeWindow);
+  const activeConfigFile = usePlotStore((state) => state.activeConfigFile);
+  const bumpSettingsRevision = usePlotStore(
+    (state) => state.bumpSettingsRevision,
+  );
 
   // Collect all monitored PV names (from plots + live list, de-duplicated)
   const plotPVNames = plots.flatMap((plot) => plot.pvNames);
@@ -29,35 +55,30 @@ function ConfigPage() {
   // "regular" or "exponential" per PV (missing means regular)
   const [valueFormats, setValueFormats] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saveStatus, setSaveStatus] = useState("");
+  const initialSettingsRef = useRef(null);
 
   // Shared settings for the <beamline>:MONO_CALC.ENERGY PV (calculated in routers/energy.py)
   const [energyConfig, setEnergyConfig] = useState(null);
   const [energySaveStatus, setEnergySaveStatus] = useState("");
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/energy-config`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setEnergyConfig(data))
-      .catch((err) => console.error("Failed to load energy config:", err));
-  }, []);
 
   const handleEnergyConfigChange = (key, value) => {
     setEnergyConfig((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSaveEnergyConfig = async () => {
+    if (!initialSettingsRef.current) return;
     try {
       setEnergySaveStatus("Saving...");
-      const res = await fetch(`${API_BASE}/api/energy-config`, {
+      const res = await fetch(energyConfigUrl(activeConfigFile), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(energyConfig),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      bumpSettingsRevision();
       setEnergySaveStatus("Saved! Re-add or reload energy PVs to apply.");
       setTimeout(() => setEnergySaveStatus(""), 4000);
     } catch (err) {
@@ -85,62 +106,94 @@ function ConfigPage() {
     setValueFormats((prev) => ({ ...prev, [pvName]: newFormat }));
   };
 
-  // Load aliases, EGUs and thresholds from backend on page mount
+  // Load all settings from the active preset on page mount.
   useEffect(() => {
-    // Load aliases
-    fetch(`${API_BASE}/api/aliases`)
-      .then((res) => res.json())
-      .then((data) => setAliases(data || {}))
-      .catch((err) => console.error("Failed to load aliases:", err));
-
-    // Load thresholds
-    fetch(`${API_BASE}/api/thresholds`)
+    let active = true;
+    setLoading(true);
+    setLoadError("");
+    initialSettingsRef.current = null;
+    fetch(configPresetUrl(activeConfigFile))
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
-      .then((data) => {
+      .then((config) => {
+        if (!active) return;
         const asStrings = {};
-        for (const [pvName, value] of Object.entries(data || {})) {
+        for (const [pvName, value] of Object.entries(
+          objectOrEmpty(config.thresholds),
+        )) {
+          const threshold =
+            typeof value === "number" ? { upper: value } : objectOrEmpty(value);
           asStrings[pvName] = {
-            upper: value?.upper != null ? String(value.upper) : "",
-            lower: value?.lower != null ? String(value.lower) : "",
+            upper: threshold.upper != null ? String(threshold.upper) : "",
+            lower: threshold.lower != null ? String(threshold.lower) : "",
           };
         }
-        setThresholds((prev) => ({ ...asStrings, ...prev }));
-      })
-      .catch((err) => console.error("Failed to load thresholds:", err));
-
-    // Load value formats
-    fetch(`${API_BASE}/api/value-formats`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setValueFormats((prev) => ({ ...(data || {}), ...prev })))
-      .catch((err) => console.error("Failed to load value formats:", err));
-
-    // Load EGUs
-    fetch(`${API_BASE}/api/egus`)
-      .then((res) => res.json())
-      .then((data) => {
-        setSelectedEgus(data || {});
+        const loadedAliases = Object.fromEntries(
+          Object.entries(objectOrEmpty(config.aliases)).filter(
+            ([, value]) => typeof value === "string" && value,
+          ),
+        );
+        const loadedEgus = Object.fromEntries(
+          Object.entries(objectOrEmpty(config.egus)).filter(
+            ([, value]) =>
+              typeof value === "string" && value && value !== "default",
+          ),
+        );
+        const loadedFormats = Object.fromEntries(
+          Object.entries(objectOrEmpty(config.value_formats)).filter(
+            ([, value]) => value === "exponential",
+          ),
+        );
+        const savedThresholds = {};
+        for (const [pvName, { upper, lower }] of Object.entries(asStrings)) {
+          if (upper.trim() === "" && lower.trim() === "") continue;
+          savedThresholds[pvName] = {};
+          if (upper.trim() !== "") savedThresholds[pvName].upper = Number(upper);
+          if (lower.trim() !== "") savedThresholds[pvName].lower = Number(lower);
+        }
+        initialSettingsRef.current = {
+          aliases: loadedAliases,
+          egus: loadedEgus,
+          thresholds: savedThresholds,
+          value_formats: loadedFormats,
+        };
+        setAliases(loadedAliases);
+        setSelectedEgus(loadedEgus);
+        setThresholds(asStrings);
+        setValueFormats(loadedFormats);
+        setEnergyConfig({
+          ...DEFAULT_ENERGY_CONFIG,
+          ...objectOrEmpty(config.energy),
+        });
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Failed to load EGUs:", err);
-        setLoading(false);
+        if (active) {
+          console.error(
+            `Failed to load settings from ${activeConfigFile}:`,
+            err,
+          );
+          setLoading(false);
+          setLoadError(`Failed to load settings from ${activeConfigFile}.`);
+        }
       });
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [activeConfigFile, loadAttempt]);
 
   // Update alias locally while typing
   const handleAliasChange = (pvName, newAlias) => {
     setAliases((prev) => ({ ...prev, [pvName]: newAlias }));
   };
 
-  // Save aliases to backend
-  // Backend expects one { pv_name, alias } per POST, so submit each entry
+  // Save all edited settings to the active preset.
   const handleSave = async () => {
+    if (!initialSettingsRef.current) return;
+
     // Validate thresholds before saving anything
     for (const [pvName, { upper, lower }] of Object.entries(thresholds)) {
       const upperTrimmed = upper.trim();
@@ -166,74 +219,59 @@ function ConfigPage() {
     try {
       setSaveStatus("Saving...");
 
-      //Save aliases
-      for (const [pvName, alias] of Object.entries(aliases)) {
-        if (!alias) continue; // skip empty aliases
-        const res = await fetch(`${API_BASE}/api/aliases`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pv_name: pvName, alias: alias }),
-        });
-        if (!res.ok) throw new Error("Save failed");
-      }
-
-      //Save EGUS ("default" removes the saved EGU)
-      for (const [pvName, egu] of Object.entries(selectedEgus)) {
-        const res =
-          !egu || egu === "default"
-            ? await fetch(
-                `${API_BASE}/api/egus/${encodeURIComponent(pvName)}`,
-                { method: "DELETE" },
-              )
-            : await fetch(`${API_BASE}/api/egus`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pv_name: pvName, egu }),
-              });
-        if (!res.ok) throw new Error("Save failed");
-      }
-
-      //Save thresholds (emptying both fields removes the thresholds)
+      const savedThresholds = {};
       for (const [pvName, { upper, lower }] of Object.entries(thresholds)) {
         const upperTrimmed = upper.trim();
         const lowerTrimmed = lower.trim();
-        const res =
-          upperTrimmed === "" && lowerTrimmed === ""
-            ? await fetch(
-                `${API_BASE}/api/thresholds/${encodeURIComponent(pvName)}`,
-                { method: "DELETE" },
-              )
-            : await fetch(`${API_BASE}/api/thresholds`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  pv_name: pvName,
-                  upper: upperTrimmed === "" ? null : Number(upperTrimmed),
-                  lower: lowerTrimmed === "" ? null : Number(lowerTrimmed),
-                }),
-              });
-        if (!res.ok) throw new Error("Save failed");
+        if (upperTrimmed === "" && lowerTrimmed === "") continue;
+        savedThresholds[pvName] = {};
+        if (upperTrimmed !== "") {
+          savedThresholds[pvName].upper = Number(upperTrimmed);
+        }
+        if (lowerTrimmed !== "") {
+          savedThresholds[pvName].lower = Number(lowerTrimmed);
+        }
       }
 
-      //Save value formats ("regular" removes the saved format)
-      for (const [pvName, valueFormat] of Object.entries(valueFormats)) {
-        const res =
-          valueFormat === "exponential"
-            ? await fetch(`${API_BASE}/api/value-formats`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  pv_name: pvName,
-                  value_format: valueFormat,
-                }),
-              })
-            : await fetch(
-                `${API_BASE}/api/value-formats/${encodeURIComponent(pvName)}`,
-                { method: "DELETE" },
-              );
-        if (!res.ok) throw new Error("Save failed");
+      const currentSettings = {
+        aliases: Object.fromEntries(
+          Object.entries(aliases).filter(([, alias]) => Boolean(alias)),
+        ),
+        egus: Object.fromEntries(
+          Object.entries(selectedEgus).filter(
+            ([, egu]) => Boolean(egu) && egu !== "default",
+          ),
+        ),
+        thresholds: savedThresholds,
+        value_formats: Object.fromEntries(
+          Object.entries(valueFormats).filter(
+            ([, format]) => format === "exponential",
+          ),
+        ),
+      };
+      const updates = Object.fromEntries(
+        Object.entries(currentSettings)
+          .map(([section, settings]) => [
+            section,
+            diffSettings(initialSettingsRef.current[section] || {}, settings),
+          ])
+          .filter(([, changes]) => Object.keys(changes).length > 0),
+      );
+      if (Object.keys(updates).length === 0) {
+        setSaveStatus("Saved!");
+        setTimeout(() => setSaveStatus(""), 2000);
+        return;
       }
 
+      const res = await fetch(configPresetUrl(activeConfigFile), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      initialSettingsRef.current = currentSettings;
+      bumpSettingsRevision();
       setSaveStatus("Saved!");
       setTimeout(() => setSaveStatus(""), 2000);
     } catch (err) {
@@ -256,11 +294,22 @@ function ConfigPage() {
           marginBottom: "20px",
         }}
       >
-        <h1>Configurations</h1>
+        <div>
+          <h1>Configurations</h1>
+          <p>Saving settings to: {activeConfigFile}</p>
+        </div>
         <button className="btn btn-secondary" onClick={() => navigate("/")}>
           ← Back to Plots
         </button>
       </div>
+      {loadError && (
+        <p role="alert">
+          {loadError} Saving is disabled until the preset loads successfully.{" "}
+          <button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>
+            Retry
+          </button>
+        </p>
+      )}
 
       {/* Layout Info */}
       <section style={{ marginBottom: "30px" }}>
@@ -531,7 +580,11 @@ function ConfigPage() {
             </table>
 
             <div style={{ marginTop: "20px" }}>
-              <button className="btn btn-primary" onClick={handleSave}>
+              <button
+                className="btn btn-primary"
+                onClick={handleSave}
+                disabled={Boolean(loadError) || !initialSettingsRef.current}
+              >
                 Save Configs
               </button>
               {saveStatus && (
@@ -582,6 +635,7 @@ function ConfigPage() {
               <button
                 className="btn btn-primary"
                 onClick={handleSaveEnergyConfig}
+                disabled={Boolean(loadError) || !initialSettingsRef.current}
               >
                 Save Energy Settings
               </button>

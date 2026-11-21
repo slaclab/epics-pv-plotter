@@ -47,6 +47,7 @@ test-results/
 # NFS silly-rename files
 .nfs*
 
-# User-saved settings (aliases, EGUs, thresholds, layouts); start from config.example.json
+# User-saved settings and configuration presets; start from config.example.json
 config.json
 config.json.lock
+configs/*.json

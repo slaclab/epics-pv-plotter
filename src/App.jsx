@@ -9,7 +9,7 @@ import PlotGrid from './components/PlotGrid';
 import BeamlineStatus from './components/BeamlineStatus';
 import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X, Pause, Play, Eye, EyeOff, Zap } from 'lucide-react';
 import './App.css';
-import { API_BASE } from "./utils/constants";
+import { configPresetUrl, energyConfigUrl } from "./utils/configApi";
 import { useConfigSync } from "./hooks/useConfigSync";
 import { formatPVValue } from "./utils/valueFormat";
 import {
@@ -191,9 +191,14 @@ function App() {
   // Pick up config edits made elsewhere (epvpm CLI, another browser)
   useConfigSync();
   const settingsRevision = usePlotStore((state) => state.settingsRevision);
+  const activeConfigFile = usePlotStore((state) => state.activeConfigFile);
+  const bumpSettingsRevision = usePlotStore(
+    (state) => state.bumpSettingsRevision,
+  );
 
   // Beamline status table is hidden by default; the user can click to show it
   const [showBeamlineStatus, setShowBeamlineStatus] = useState(false);
+  const hasRestoredLayoutRef = useRef(false);
   // Set once the visibility has been chosen after mount (toggle click or a
   // manual config load), so a slow startup /api/config can't override it
   const beamlineStatusChosenRef = useRef(false);
@@ -213,19 +218,24 @@ function App() {
   // Per-PV { upper, lower } thresholds; App remounts when returning from /config,
   // so this always reflects the latest saved values
   const [thresholds, setThresholds] = useState({});
+  const [valueFormats, setValueFormats] = useState({});
+  const [egus, setEgus] = useState({});
+  const [aliases, setAliases] = useState({});
 
-  // On startup, read the standard config: always apply showBeamlineStatus,
-  // and auto-load the plot layout only when none was restored from
-  // localStorage (rehydration is synchronous, so plots is already set)
+  // Load settings from the active preset. A locally restored layout takes
+  // precedence on startup; explicitly loading a preset updates it in PlotGrid.
   useEffect(() => {
+    let active = true;
     const hasRestoredPlots = usePlotStore.getState().plots.length > 0;
+    const shouldRestoreLayout = !hasRestoredLayoutRef.current;
 
-    fetch(`${API_BASE}/api/config`)
+    fetch(configPresetUrl(activeConfigFile))
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((data) => {
+        if (!active) return;
         const layout = data?.layouts?.default;
         if (
           typeof layout?.showBeamlineStatus === 'boolean' &&
@@ -233,64 +243,42 @@ function App() {
         ) {
           setShowBeamlineStatus(layout.showBeamlineStatus);
         }
-        if (!hasRestoredPlots && layout?.plots?.length > 0) {
-          usePlotStore.getState().loadLayout(layout);
+        if (shouldRestoreLayout) {
+          hasRestoredLayoutRef.current = true;
+          if (!hasRestoredPlots && layout?.plots?.length > 0) {
+            usePlotStore.getState().loadLayout(layout);
+          }
         }
+
+        const storedThresholds = data?.thresholds || {};
+        setThresholds(
+          Object.fromEntries(
+            Object.entries(storedThresholds).map(([pvName, value]) => [
+              pvName,
+              typeof value === "number" ? { upper: value } : value,
+            ]),
+          ),
+        );
+        setValueFormats(data?.value_formats || {});
+        setEgus(data?.egus || {});
+        setAliases(data?.aliases || {});
       })
-      .catch((err) => console.error("Failed to load standard config:", err));
-  }, []);
+      .catch((err) => {
+        if (active) {
+          console.error(
+            `Failed to load configuration ${activeConfigFile}:`,
+            err,
+          );
+        }
+      });
 
-  useEffect(() => {
-    fetch(`${API_BASE}/api/thresholds`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setThresholds(data || {}))
-      .catch((err) => console.error("Failed to load thresholds:", err));
-  }, [settingsRevision]);
-
-
-
-  // Per-PV "regular" / "exponential" value format for the Live PV Values panel
-  const [valueFormats, setValueFormats] = useState({});
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/value-formats`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setValueFormats(data || {}))
-      .catch((err) => console.error("Failed to load value formats:", err));
-  }, [settingsRevision]);
-
-  // Per-PV engineering units for the Live PV Values panel
-  const [egus, setEgus] = useState({});
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/egus`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setEgus(data || {}))
-      .catch((err) => console.error("Failed to load EGUs:", err));
-  }, [settingsRevision]);
+    return () => {
+      active = false;
+    };
+  }, [activeConfigFile, settingsRevision]);
 
   // PV aliases for the Live PV Values panel, toggled like the plot legend
-  const [aliases, setAliases] = useState({});
   const [showAlias, setShowAlias] = useState(true);
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/aliases`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setAliases(data || {}))
-      .catch((err) => console.error("Failed to load aliases:", err));
-  }, [settingsRevision]);
 
   // Alias if enabled and available, else the raw PV name
   // (energy PVs get a readable "Energy (<encoder>)" label instead)
@@ -311,17 +299,22 @@ function App() {
 
       //Save Plot Layouts
     
-      const res = await fetch(`${API_BASE}/api/layout`, {
-        method: 'POST',
+      const res = await fetch(configPresetUrl(activeConfigFile), {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plots: plots,
-          livePVNames: livePVNames,
-          globalTimeWindow: globalTimeWindow,
-          showBeamlineStatus: showBeamlineStatus,
+          layouts: {
+            default: {
+              plots,
+              livePVNames,
+              globalTimeWindow,
+              showBeamlineStatus,
+            },
+          },
         }),
       });
       if (!res.ok) throw new Error('Save failed');
+      bumpSettingsRevision();
       setSaveStatus('Saved!');
       setTimeout(() => setSaveStatus(''), 2000);
     } catch (err) {
@@ -381,8 +374,8 @@ function App() {
   };
 
   // Add the "<beamline>:MONO_CALC.ENERGY" Live PV (calculated by the gateway,
-  // see routers/energy.py). An entered PV is saved as the shared encoder in
-  // /api/energy-config; with nothing entered the saved encoder is used.
+  // see routers/energy.py). An entered PV is saved as the active preset's
+  // encoder; with nothing entered the saved encoder is used.
   const handleAddEnergy = async () => {
     const encoderNames = parsePVNames(pvInput);
     if (encoderNames.length > 1) {
@@ -391,7 +384,7 @@ function App() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/energy-config`);
+      const res = await fetch(energyConfigUrl(activeConfigFile));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const energyConfig = await res.json();
 
@@ -400,12 +393,13 @@ function App() {
         : energyConfig.encoder_pv;
 
       if (encoder !== energyConfig.encoder_pv) {
-        const save = await fetch(`${API_BASE}/api/energy-config`, {
+        const save = await fetch(energyConfigUrl(activeConfigFile), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...energyConfig, encoder_pv: encoder }),
         });
         if (!save.ok) throw new Error(`HTTP ${save.status}`);
+        bumpSettingsRevision();
       }
 
       const energyName = toEnergyPVName(encoder);

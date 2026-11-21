@@ -8,6 +8,11 @@
 // Must match ENERGY_SUFFIX and CALC_RECORD in routers/energy.py
 export const ENERGY_SUFFIX = ".ENERGY";
 export const CALC_RECORD = "MONO_CALC";
+export const DEFAULT_ENERGY_CONFIG = {
+  encoder_pv: "BL22:SCAN:MASTER:MOTOR1.REP",
+  d_spacing_pv: "BL22:STORE:CRYSTAL_D",
+  offset_pv: "BL22:STORE:CRYSTAL_ENCODER_OFFSET",
+};
 // Older name formats, still accepted so saved traces load. Their encoder is
 // taken from the name instead of the energy config:
 //   "<encoder record>.ENERGY"  e.g. "BL22:SCAN:MASTER:MOTOR1.ENERGY"
