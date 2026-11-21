@@ -307,6 +307,13 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           onConnect: () => {
             setConnectionStatus((prev) => ({ ...prev, [pvName]: "connected" }));
           },
+          onReset: () => {
+            buffersRef.current[pvName]?.clear();
+            setConnectionStatus((prev) => ({
+              ...prev,
+              [pvName]: "connecting",
+            }));
+          },
         });
 
         unsubscribersRef.current[pvName] = unsubscribe;

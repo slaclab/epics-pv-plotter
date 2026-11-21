@@ -1,9 +1,31 @@
 // src/pages/ConfigPage.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePlotStore } from "../stores/usePlotStore";
 import { configPresetUrl, energyConfigUrl } from "../utils/configApi";
 import { DEFAULT_ENERGY_CONFIG } from "../utils/energy";
+
+function objectOrEmpty(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
+}
+
+function diffSettings(previous, current) {
+  const changes = {};
+  const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
+  keys.forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(current, key)) {
+      changes[key] = null;
+    } else if (
+      !Object.prototype.hasOwnProperty.call(previous, key) ||
+      JSON.stringify(previous[key]) !== JSON.stringify(current[key])
+    ) {
+      changes[key] = current[key];
+    }
+  });
+  return changes;
+}
 
 function ConfigPage() {
   const navigate = useNavigate();
@@ -33,7 +55,10 @@ function ConfigPage() {
   // "regular" or "exponential" per PV (missing means regular)
   const [valueFormats, setValueFormats] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saveStatus, setSaveStatus] = useState("");
+  const initialSettingsRef = useRef(null);
 
   // Shared settings for the <beamline>:MONO_CALC.ENERGY PV (calculated in routers/energy.py)
   const [energyConfig, setEnergyConfig] = useState(null);
@@ -44,6 +69,7 @@ function ConfigPage() {
   };
 
   const handleSaveEnergyConfig = async () => {
+    if (!initialSettingsRef.current) return;
     try {
       setEnergySaveStatus("Saving...");
       const res = await fetch(energyConfigUrl(activeConfigFile), {
@@ -83,6 +109,9 @@ function ConfigPage() {
   // Load all settings from the active preset on page mount.
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setLoadError("");
+    initialSettingsRef.current = null;
     fetch(configPresetUrl(activeConfigFile))
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -91,21 +120,52 @@ function ConfigPage() {
       .then((config) => {
         if (!active) return;
         const asStrings = {};
-        for (const [pvName, value] of Object.entries(config.thresholds || {})) {
+        for (const [pvName, value] of Object.entries(
+          objectOrEmpty(config.thresholds),
+        )) {
           const threshold =
-            typeof value === "number" ? { upper: value } : value || {};
+            typeof value === "number" ? { upper: value } : objectOrEmpty(value);
           asStrings[pvName] = {
             upper: threshold.upper != null ? String(threshold.upper) : "",
             lower: threshold.lower != null ? String(threshold.lower) : "",
           };
         }
-        setAliases(config.aliases || {});
-        setSelectedEgus(config.egus || {});
+        const loadedAliases = Object.fromEntries(
+          Object.entries(objectOrEmpty(config.aliases)).filter(
+            ([, value]) => typeof value === "string" && value,
+          ),
+        );
+        const loadedEgus = Object.fromEntries(
+          Object.entries(objectOrEmpty(config.egus)).filter(
+            ([, value]) =>
+              typeof value === "string" && value && value !== "default",
+          ),
+        );
+        const loadedFormats = Object.fromEntries(
+          Object.entries(objectOrEmpty(config.value_formats)).filter(
+            ([, value]) => value === "exponential",
+          ),
+        );
+        const savedThresholds = {};
+        for (const [pvName, { upper, lower }] of Object.entries(asStrings)) {
+          if (upper.trim() === "" && lower.trim() === "") continue;
+          savedThresholds[pvName] = {};
+          if (upper.trim() !== "") savedThresholds[pvName].upper = Number(upper);
+          if (lower.trim() !== "") savedThresholds[pvName].lower = Number(lower);
+        }
+        initialSettingsRef.current = {
+          aliases: loadedAliases,
+          egus: loadedEgus,
+          thresholds: savedThresholds,
+          value_formats: loadedFormats,
+        };
+        setAliases(loadedAliases);
+        setSelectedEgus(loadedEgus);
         setThresholds(asStrings);
-        setValueFormats(config.value_formats || {});
+        setValueFormats(loadedFormats);
         setEnergyConfig({
           ...DEFAULT_ENERGY_CONFIG,
-          ...(config.energy || {}),
+          ...objectOrEmpty(config.energy),
         });
         setLoading(false);
       })
@@ -116,13 +176,14 @@ function ConfigPage() {
             err,
           );
           setLoading(false);
+          setLoadError(`Failed to load settings from ${activeConfigFile}.`);
         }
       });
 
     return () => {
       active = false;
     };
-  }, [activeConfigFile]);
+  }, [activeConfigFile, loadAttempt]);
 
   // Update alias locally while typing
   const handleAliasChange = (pvName, newAlias) => {
@@ -131,6 +192,8 @@ function ConfigPage() {
 
   // Save all edited settings to the active preset.
   const handleSave = async () => {
+    if (!initialSettingsRef.current) return;
+
     // Validate thresholds before saving anything
     for (const [pvName, { upper, lower }] of Object.entries(thresholds)) {
       const upperTrimmed = upper.trim();
@@ -170,28 +233,44 @@ function ConfigPage() {
         }
       }
 
+      const currentSettings = {
+        aliases: Object.fromEntries(
+          Object.entries(aliases).filter(([, alias]) => Boolean(alias)),
+        ),
+        egus: Object.fromEntries(
+          Object.entries(selectedEgus).filter(
+            ([, egu]) => Boolean(egu) && egu !== "default",
+          ),
+        ),
+        thresholds: savedThresholds,
+        value_formats: Object.fromEntries(
+          Object.entries(valueFormats).filter(
+            ([, format]) => format === "exponential",
+          ),
+        ),
+      };
+      const updates = Object.fromEntries(
+        Object.entries(currentSettings)
+          .map(([section, settings]) => [
+            section,
+            diffSettings(initialSettingsRef.current[section] || {}, settings),
+          ])
+          .filter(([, changes]) => Object.keys(changes).length > 0),
+      );
+      if (Object.keys(updates).length === 0) {
+        setSaveStatus("Saved!");
+        setTimeout(() => setSaveStatus(""), 2000);
+        return;
+      }
+
       const res = await fetch(configPresetUrl(activeConfigFile), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          aliases: Object.fromEntries(
-            Object.entries(aliases).filter(([, alias]) => Boolean(alias)),
-          ),
-          egus: Object.fromEntries(
-            Object.entries(selectedEgus).filter(
-              ([, egu]) => Boolean(egu) && egu !== "default",
-            ),
-          ),
-          thresholds: savedThresholds,
-          value_formats: Object.fromEntries(
-            Object.entries(valueFormats).filter(
-              ([, format]) => format === "exponential",
-            ),
-          ),
-        }),
+        body: JSON.stringify(updates),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+      initialSettingsRef.current = currentSettings;
       bumpSettingsRevision();
       setSaveStatus("Saved!");
       setTimeout(() => setSaveStatus(""), 2000);
@@ -223,6 +302,14 @@ function ConfigPage() {
           ← Back to Plots
         </button>
       </div>
+      {loadError && (
+        <p role="alert">
+          {loadError} Saving is disabled until the preset loads successfully.{" "}
+          <button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>
+            Retry
+          </button>
+        </p>
+      )}
 
       {/* Layout Info */}
       <section style={{ marginBottom: "30px" }}>
@@ -493,7 +580,11 @@ function ConfigPage() {
             </table>
 
             <div style={{ marginTop: "20px" }}>
-              <button className="btn btn-primary" onClick={handleSave}>
+              <button
+                className="btn btn-primary"
+                onClick={handleSave}
+                disabled={Boolean(loadError) || !initialSettingsRef.current}
+              >
                 Save Configs
               </button>
               {saveStatus && (
@@ -544,6 +635,7 @@ function ConfigPage() {
               <button
                 className="btn btn-primary"
                 onClick={handleSaveEnergyConfig}
+                disabled={Boolean(loadError) || !initialSettingsRef.current}
               >
                 Save Energy Settings
               </button>

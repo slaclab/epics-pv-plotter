@@ -9,8 +9,8 @@ overwrite each other (unlike POST /api/layout, which replaces the whole
 layout). Locking is shared with every other config writer via
 routers.config.edit_config().
 
-GET /api/config/events pushes a message to open browsers whenever
-config.json changes, so they reload right away (GET /api/config/version
+GET /api/config/events pushes a message to open browsers whenever the
+selected preset changes, so they reload right away (GET /api/config/version
 returns the same fingerprints on demand).
 
 Plot placement mirrors src/stores/usePlotStore.js (findBestPosition /
@@ -23,12 +23,17 @@ import hashlib
 import json
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from routers import config as config_module
-from routers.config import DEFAULT_CONFIG, edit_config, load_config
+from routers.config import (
+    DEFAULT_CONFIG,
+    _read_config_file,
+    edit_config,
+    load_config,
+    resolve_config_file,
+)
 
 router = APIRouter(prefix="/api", tags=["layout-ops"])
 
@@ -37,7 +42,7 @@ GRID_COLS = 12
 DEFAULT_WIDTH = 4
 DEFAULT_HEIGHT = 3
 
-# How often the events stream looks at config.json's modification time
+# How often the events stream looks at the selected preset's modification time
 # (a local file stat, no network traffic) and how often it sends a
 # keep-alive comment so idle connections aren't dropped by proxies
 WATCH_INTERVAL_S = 1.0
@@ -115,48 +120,57 @@ def _digest(value) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
-def config_version() -> dict:
+def config_version(config_file: str | None = None) -> dict:
     """
     Hashes of the layout and of everything else, so a browser can reload
     only the part that changed (a new alias must not discard unsaved plot
     edits in someone else's browser).
     """
-    config = load_config()
+    config_path = resolve_config_file(config_file)
+    config = (
+        _read_config_file(config_path)
+        if config_file is not None
+        else load_config(config_path)
+    )
     layout = config.get(LAYOUT_KEY, {}).get("default", {})
     settings = {k: v for k, v in config.items() if k != LAYOUT_KEY}
     return {"layout": _digest(layout), "settings": _digest(settings)}
 
 
-def _config_mtime():
+def _config_mtime(config_file):
     try:
-        return config_module.CONFIG_FILE.stat().st_mtime_ns
+        return config_file.stat().st_mtime_ns
     except FileNotFoundError:
         return None
 
 
 @router.get("/config/version")
-async def get_config_version():
-    return config_version()
+async def get_config_version(config_file: str | None = Query(None)):
+    return config_version(config_file)
 
 
 @router.get("/config/events")
-async def config_events(request: Request):
+async def config_events(
+    request: Request, config_file: str | None = Query(None)
+):
     """
     Server-Sent Events stream: sends the current version on connect, then a
-    new one each time config.json changes (from the UI, epvpm, or a manual
-    edit). Watching the file rather than hooking save_config also works with
-    several uvicorn workers.
+    new one each time the selected preset changes (from the UI, epvpm, or a
+    manual edit). Watching the file rather than hooking save_config also works
+    with several uvicorn workers.
     """
+
+    config_path = resolve_config_file(config_file)
 
     async def stream():
         last_mtime = object()  # forces a first message
         last_version = None
         idle = 0.0
         while not await request.is_disconnected():
-            mtime = _config_mtime()
+            mtime = _config_mtime(config_path)
             if mtime != last_mtime:
                 last_mtime = mtime
-                version = config_version()
+                version = config_version(config_file)
                 if version != last_version:
                     last_version = version
                     idle = 0.0

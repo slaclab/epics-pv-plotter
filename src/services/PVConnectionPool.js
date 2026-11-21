@@ -72,6 +72,7 @@ class PVConnectionPool {
       onError: callbacks.onError,
       onConnect: callbacks.onConnect,
       onDisconnect: callbacks.onDisconnect,
+      onReset: callbacks.onReset,
     };
 
     entry.subscribers.add(subscriber);
@@ -118,6 +119,9 @@ class PVConnectionPool {
     this.pool.forEach((entry, pvName) => {
       if (!isEnergyPV(pvName)) return;
 
+      entry.subscribers.forEach((subscriber) => {
+        subscriber.onReset?.();
+      });
       entry.ws.disconnect();
       useLiveValueStore.getState().removeLatestValue(pvName);
       entry.ws = this.createConnection(pvName, entry.subscribers);

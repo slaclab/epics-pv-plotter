@@ -22,10 +22,13 @@ from routers import layout_ops  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    cfg = tmp_path / "config.json"
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    cfg = config_dir / "config.json"
     cfg.write_text(json.dumps({"aliases": {}, "layouts": {"default": {
         "plots": [], "livePVNames": [], "globalTimeWindow": 60}}}))
     monkeypatch.setattr(config_router, "CONFIG_FILE", cfg)
+    monkeypatch.setattr(config_router, "LEGACY_CONFIG_FILE", tmp_path / "legacy.json")
     app = FastAPI()
     app.include_router(config_router.router)
     app.include_router(layout_ops.router)
@@ -91,6 +94,26 @@ def test_version_separates_layout_and_settings(client):
     assert v2["layout"] != v1["layout"] and v2["settings"] == v1["settings"]
 
 
+def test_version_and_events_track_the_selected_preset(client):
+    preset = config_router.CONFIG_FILE.parent / "config1.json"
+    preset.write_text(json.dumps({"aliases": {"A": "old"}, "layouts": {"default": {}}}))
+    default_version = client.get("/api/config/version").json()
+    preset_version = client.get(
+        "/api/config/version", params={"config_file": "config1.json"}
+    ).json()
+
+    response = client.patch(
+        "/api/config-presets/config1.json",
+        json={"aliases": {"A": "new"}},
+    )
+
+    assert response.status_code == 200
+    assert client.get("/api/config/version").json() == default_version
+    assert client.get(
+        "/api/config/version", params={"config_file": "config1.json"}
+    ).json() != preset_version
+
+
 def test_other_config_sections_preserved(client):
     client.post("/api/aliases", json={"pv_name": "A", "alias": "I0"})
     client.post("/api/layout/plots", json={"pv_names": ["A"]})
@@ -114,7 +137,10 @@ def _worker(cfg_path, worker_id, n_edits):
             layout["livePVNames"].append(f"PV{worker_id}:{i}")
 
 
-def test_concurrent_writers_in_separate_processes_lose_nothing(tmp_path):
+def test_concurrent_writers_in_separate_processes_lose_nothing(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(config_router, "LEGACY_CONFIG_FILE", tmp_path / "legacy.json")
     cfg = tmp_path / "config.json"
     cfg.write_text(json.dumps({}))
     workers, n_edits = 4, 25
@@ -143,6 +169,7 @@ def test_edit_config_writes_nothing_if_the_block_raises(client):
 
 def test_missing_config_does_not_mutate_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(config_router, "CONFIG_FILE", tmp_path / "missing.json")
+    monkeypatch.setattr(config_router, "LEGACY_CONFIG_FILE", tmp_path / "legacy.json")
     with config_router.edit_config() as config:
         config["aliases"]["A"] = "I0"
     assert config_router.DEFAULT_CONFIG["aliases"] == {}
@@ -176,6 +203,63 @@ def test_missing_config_preset_returns_404(client):
     assert client.get("/api/config-presets/not-found.json").status_code == 404
 
 
+def test_fresh_install_creates_default_preset(tmp_path, monkeypatch):
+    config_dir = tmp_path / "configs"
+    monkeypatch.setattr(config_router, "CONFIG_FILE", config_dir / "config.json")
+    monkeypatch.setattr(config_router, "LEGACY_CONFIG_FILE", tmp_path / "missing.json")
+    app = FastAPI()
+    app.include_router(config_router.router)
+    client = TestClient(app)
+
+    response = client.get("/api/config-presets")
+
+    assert response.status_code == 200
+    assert response.json()["files"] == ["config.json"]
+    response = client.get("/api/config-presets/config.json")
+
+    assert response.status_code == 200
+    assert response.json() == config_router.DEFAULT_CONFIG
+    assert (config_dir / "config.json").is_file()
+
+
+def test_missing_default_is_initialized_and_migrates_legacy_config(tmp_path, monkeypatch):
+    config_dir = tmp_path / "configs"
+    legacy_file = tmp_path / "config.json"
+    config_dir.mkdir()
+    legacy = {"aliases": {"OLD:PV": "Legacy"}, "layouts": {"default": {"plots": []}}}
+    legacy_file.write_text(json.dumps(legacy))
+    monkeypatch.setattr(config_router, "CONFIG_FILE", config_dir / "config.json")
+    monkeypatch.setattr(config_router, "LEGACY_CONFIG_FILE", legacy_file)
+    app = FastAPI()
+    app.include_router(config_router.router)
+    client = TestClient(app)
+
+    response = client.get("/api/config-presets/config.json")
+
+    assert response.status_code == 200
+    assert response.json() == legacy
+    assert json.loads((config_dir / "config.json").read_text()) == legacy
+    assert json.loads(legacy_file.read_text()) == legacy
+
+
+def test_existing_default_is_not_overwritten_by_legacy_file(tmp_path, monkeypatch):
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    current = {"aliases": {"NEW:PV": "Current"}}
+    legacy = {"aliases": {"OLD:PV": "Legacy"}}
+    default_file = config_dir / "config.json"
+    default_file.write_text(json.dumps(current))
+    legacy_file = tmp_path / "config.json"
+    legacy_file.write_text(json.dumps(legacy))
+    monkeypatch.setattr(config_router, "CONFIG_FILE", default_file)
+    monkeypatch.setattr(config_router, "LEGACY_CONFIG_FILE", legacy_file)
+
+    config_router._ensure_default_config_file()
+
+    assert json.loads(default_file.read_text()) == current
+    assert json.loads(legacy_file.read_text()) == legacy
+
+
 def test_preset_updates_only_requested_sections(client):
     preset = config_router.CONFIG_FILE.parent / "config1.json"
     preset.write_text(json.dumps({
@@ -193,6 +277,66 @@ def test_preset_updates_only_requested_sections(client):
     assert preset_config["egus"] == {"A": "V"}
     assert preset_config["layouts"]["default"]["plots"][0]["pvNames"] == ["A"]
     assert client.get("/api/config").json()["layouts"]["default"]["plots"] == []
+
+
+def test_preset_patch_merges_individual_entries_and_deletes_explicitly(client):
+    preset = config_router.CONFIG_FILE.parent / "config1.json"
+    preset.write_text(json.dumps({"aliases": {"A": "old", "B": "keep"}}))
+
+    response = client.patch(
+        "/api/config-presets/config1.json",
+        json={"aliases": {"A": "new", "C": "concurrent"}},
+    )
+
+    assert response.status_code == 200
+    assert client.get("/api/config-presets/config1.json").json()["aliases"] == {
+        "A": "new",
+        "B": "keep",
+        "C": "concurrent",
+    }
+    response = client.patch(
+        "/api/config-presets/config1.json",
+        json={"aliases": {"B": None}},
+    )
+    assert response.status_code == 200
+    assert client.get("/api/config-presets/config1.json").json()["aliases"] == {
+        "A": "new",
+        "C": "concurrent",
+    }
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"aliases": {"PV": {"bad": 1}}},
+        {"thresholds": {"PV": {"upper": "not-a-number"}}},
+        {"thresholds": {"PV": {"upper": 10**1000}}},
+        {"thresholds": {"PV": {"upper": 2, "lower": 3}}},
+        {"value_formats": {"PV": "unsupported"}},
+        {"layouts": {"default": {"plots": [{"pvNames": "not-a-list"}]}}},
+    ],
+)
+def test_preset_patch_rejects_invalid_nested_entries_without_writing(client, updates):
+    preset = config_router.CONFIG_FILE.parent / "config1.json"
+    original = {"aliases": {"PV": "safe"}}
+    preset.write_text(json.dumps(original))
+
+    response = client.patch("/api/config-presets/config1.json", json=updates)
+
+    assert response.status_code == 422
+    assert client.get("/api/config-presets/config1.json").json() == original
+
+
+def test_preset_path_does_not_follow_symlinks_outside_config_directory(
+    client, tmp_path
+):
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}")
+    (config_router.CONFIG_FILE.parent / "outside-link.json").symlink_to(outside)
+
+    response = client.get("/api/config-presets/outside-link.json")
+
+    assert response.status_code == 404
 
 
 def test_preset_updates_reject_unknown_sections(client):
@@ -237,6 +381,17 @@ def test_energy_config_reads_from_requested_preset(client):
     assert client.get("/api/energy-config").json()["encoder_pv"] != (
         "BL22:TEST:NEW_ENCODER.REP"
     )
+
+
+def test_invalid_named_energy_config_fails_instead_of_using_defaults(client):
+    (config_router.CONFIG_FILE.parent / "invalid.json").write_text("{")
+
+    response = client.get(
+        "/api/energy-config", params={"config_file": "invalid.json"}
+    )
+
+    assert response.status_code == 500
+    assert "invalid JSON" in response.json()["detail"]
 
 
 # ---------- PV names containing "/" ----------

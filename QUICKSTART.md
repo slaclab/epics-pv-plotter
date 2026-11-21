@@ -45,7 +45,10 @@ persist across rebuilds/restarts and can be edited directly on the host.
 `configs/config.json` is the default configuration; additional JSON files in
 that folder appear as selectable presets in the plotter. Loading a preset makes
 it the active save target for Config Page settings, energy settings, and saved
-plot layouts. Create the default from the template before the first
+plot layouts. The backend initializes a default when needed and, on native
+installs, migrates an existing root-level
+`config.json` the first time the new default is requested. It never replaces
+an existing `configs/config.json`. To pre-create the default before the first
 `docker compose up`:
 ```bash
 mkdir -p configs
@@ -65,7 +68,9 @@ Run the native deployment script on each intermediate server, from its current
 `~/Documents/epics-pv-plotter`, then restarts the existing gateway and
 frontend systemd services. It verifies each restarted service is active before
 reporting success. It does not use Docker, install dependencies on the Pi, or
-overwrite `config.json`.
+overwrite configuration files. An existing root-level `config.json` is
+migrated to `configs/config.json` on the Pi when the application first loads
+the default preset.
 
 On each intermediate server, configure SSH key access to its Pi and create a
 local inventory with the Pi's hostname and username:

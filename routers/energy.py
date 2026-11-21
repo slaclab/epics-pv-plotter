@@ -32,6 +32,7 @@ from calc.energy import EnergyCalcError, encoder_angle_deg, bragg_energy_ev
 from routers.config import (
     edit_config,
     load_config,
+    _read_config_file,
     resolve_config_file,
 )
 
@@ -64,7 +65,12 @@ active_energy_streams = 0
 
 def get_energy_config(config_file: str | None = None) -> dict:
     config_path = resolve_config_file(config_file)
-    stored = load_config(config_path).get("energy", {})
+    config = (
+        _read_config_file(config_path)
+        if config_file is not None
+        else load_config(config_path)
+    )
+    stored = config.get("energy", {})
     if not isinstance(stored, dict):
         stored = {}
     # Only known keys, so settings removed from the app (the old

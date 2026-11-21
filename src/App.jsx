@@ -198,6 +198,7 @@ function App() {
 
   // Beamline status table is hidden by default; the user can click to show it
   const [showBeamlineStatus, setShowBeamlineStatus] = useState(false);
+  const hasRestoredLayoutRef = useRef(false);
   // Set once the visibility has been chosen after mount (toggle click or a
   // manual config load), so a slow startup /api/config can't override it
   const beamlineStatusChosenRef = useRef(false);
@@ -226,6 +227,7 @@ function App() {
   useEffect(() => {
     let active = true;
     const hasRestoredPlots = usePlotStore.getState().plots.length > 0;
+    const shouldRestoreLayout = !hasRestoredLayoutRef.current;
 
     fetch(configPresetUrl(activeConfigFile))
       .then((res) => {
@@ -241,8 +243,11 @@ function App() {
         ) {
           setShowBeamlineStatus(layout.showBeamlineStatus);
         }
-        if (!hasRestoredPlots && layout?.plots?.length > 0) {
-          usePlotStore.getState().loadLayout(layout);
+        if (shouldRestoreLayout) {
+          hasRestoredLayoutRef.current = true;
+          if (!hasRestoredPlots && layout?.plots?.length > 0) {
+            usePlotStore.getState().loadLayout(layout);
+          }
         }
 
         const storedThresholds = data?.thresholds || {};

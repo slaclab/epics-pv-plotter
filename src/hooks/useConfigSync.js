@@ -1,5 +1,5 @@
 // src/hooks/useConfigSync.js
-// Keep this browser in step with config.json on the server.
+// Keep this browser in step with its active preset on the server.
 //
 // The plot layout normally comes from localStorage, and aliases/EGUs/
 // thresholds/value formats are fetched once on mount, so edits made from
@@ -8,7 +8,7 @@
 //
 // Listens to GET /api/config/events (Server-Sent Events). The server sends
 // separate hashes for the layout and for everything else, once on connect
-// and again whenever config.json changes:
+// and again whenever the active preset changes:
 //   - layout changed   -> replace plots / Live PVs with the server layout
 //   - settings changed -> bump settingsRevision so components re-fetch
 //
@@ -26,6 +26,7 @@ import { useEffect } from "react";
 
 import { usePlotStore } from "../stores/usePlotStore";
 import { API_BASE } from "../utils/constants";
+import { configPresetUrl } from "../utils/configApi";
 
 const RETRY_DELAY_MS = 3000;
 
@@ -33,8 +34,6 @@ export function useConfigSync() {
   const activeConfigFile = usePlotStore((state) => state.activeConfigFile);
 
   useEffect(() => {
-    if (activeConfigFile !== "config.json") return undefined;
-
     let latest = null;
     let applied = null;
     let reloading = false;
@@ -54,7 +53,7 @@ export function useConfigSync() {
       const target = latest.layout;
 
       try {
-        const res = await fetch(`${API_BASE}/api/config`);
+        const res = await fetch(configPresetUrl(activeConfigFile));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const config = await res.json();
         if (stopped) return;
@@ -79,7 +78,8 @@ export function useConfigSync() {
       syncLayout();
     };
 
-    const source = new EventSource(`${API_BASE}/api/config/events`);
+    const params = new URLSearchParams({ config_file: activeConfigFile });
+    const source = new EventSource(`${API_BASE}/api/config/events?${params}`);
 
     source.onmessage = (event) => {
       let version;
