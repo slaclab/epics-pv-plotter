@@ -10,7 +10,6 @@ import fcntl
 import json
 import logging
 import re
-import re
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Any, Iterator, Literal
@@ -86,7 +85,6 @@ def save_config(config: dict, config_file: Path | None = None) -> None:
 
 @contextmanager
 def config_lock(config_file: Path | None = None) -> Iterator[None]:
-    config_file = _ensure_config_path(config_file or CONFIG_FILE)
     """
     Exclusive lock on config.json across processes (e.g. several uvicorn
     workers). Every writer must hold it for its whole read-modify-write so
@@ -95,6 +93,7 @@ def config_lock(config_file: Path | None = None) -> Iterator[None]:
     Never `await` while holding it: the flock call blocks, and a second
     coroutine in the same process waiting on it would stall the event loop.
     """
+    config_file = _ensure_config_path(config_file or CONFIG_FILE)
     lock_path = config_file.with_suffix(".json.lock")
     config_file.parent.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "w", encoding="utf-8") as lock:
@@ -135,24 +134,16 @@ async def get_config():
     """get the complete configuration"""
     return load_config()
 
+
 _SAFE_CONFIG_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.json$")
 
 
-    # Accept only simple preset basenames (no path separators), ending in .json.
-    # This prevents path traversal and absolute path injection before filesystem use.
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+\.json", filename):
-        raise HTTPException(status_code=400, detail="Invalid configuration filename")
-
-    candidate = Path(filename).name
+def _preset_path(filename: str) -> Path:
     if not _SAFE_CONFIG_FILENAME.fullmatch(filename):
-    preset_path = (config_dir / candidate).resolve()
-
-    candidate = Path(filename)
-    if candidate.name != filename or candidate.suffix != ".json":
         raise HTTPException(status_code=400, detail="Invalid configuration filename")
 
     config_dir = CONFIG_FILE.parent.resolve()
-    preset_path = (config_dir / candidate.name).resolve()
+    preset_path = (config_dir / filename).resolve()
     if preset_path.parent != config_dir:
         raise HTTPException(status_code=400, detail="Invalid configuration path")
     if not preset_path.is_file():

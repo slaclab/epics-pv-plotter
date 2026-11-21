@@ -33,7 +33,6 @@ from routers.config import (
     edit_config,
     load_config,
     resolve_config_file,
-    resolve_config_file as resolve_validated_config_file,
 )
 
 log = logging.getLogger(__name__)
@@ -60,14 +59,7 @@ PV_CONNECT_TIMEOUT = float(os.environ.get("PV_CONNECT_TIMEOUT", "10"))
 active_energy_streams = 0
 
 
-# ---------- settings (stored in config.json like aliases) ----------
-
-def _validated_config_filename(config_file: str | None) -> str | None:
-    if config_file is None:
-        return None
-    # Force validation at the API boundary (raises HTTPException on invalid input).
-    resolve_validated_config_file(config_file)
-    return config_file
+# ---------- settings (stored in the active preset like aliases) ----------
 
 
 def get_energy_config(config_file: str | None = None) -> dict:
@@ -103,7 +95,6 @@ class EnergyConfigUpdate(BaseModel):
 @router.get("/api/energy-config")
 async def read_energy_config(config_file: str | None = Query(None)):
     """get the energy calculation settings (encoder and store PV names)"""
-    config_file = _validated_config_filename(config_file)
     return get_energy_config(config_file)
 
 
@@ -112,7 +103,6 @@ async def update_energy_config(
     update: EnergyConfigUpdate, config_file: str | None = Query(None)
 ):
     """save the energy calculation settings"""
-    config_file = _validated_config_filename(config_file)
     config_path = resolve_config_file(config_file)
     with edit_config(config_path, strict=config_file is not None) as config:
         config["energy"] = update.model_dump()
@@ -205,7 +195,6 @@ async def read_energy(
     config_file: str | None = Query(None),
 ):
     """read the input PVs once and return the calculated energy (eV)"""
-    config_file = _validated_config_filename(config_file)
     config = get_energy_config(config_file)
     encoder = encoder or config["encoder_pv"]
     input_names = input_pv_names(encoder, config)
@@ -241,10 +230,9 @@ async def energy_websocket(
 ):
     global active_energy_streams
 
+    config = get_energy_config(config_file)
     await websocket.accept()
 
-    config_file = _validated_config_filename(config_file)
-    config = get_energy_config(config_file)
     encoder = encoder or config["encoder_pv"]
     stream_name = energy_pv_name(encoder)
     input_names = input_pv_names(encoder, config)
