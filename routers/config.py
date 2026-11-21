@@ -127,16 +127,20 @@ async def get_config():
 
 
 def _preset_path(filename: str) -> Path:
+    filename = filename.strip()
+    candidate = Path(filename)
     if (
-        not filename.endswith(".json")
-        or filename != Path(filename).name
+        not filename
+        or candidate.name != filename
+        or candidate.suffix != ".json"
+        or "/" in filename
         or "\\" in filename
     ):
         raise HTTPException(status_code=400, detail="Invalid configuration filename")
 
-    preset_path = CONFIG_FILE.parent / filename
     config_dir = CONFIG_FILE.parent.resolve()
-    if preset_path.resolve().parent != config_dir or not preset_path.is_file():
+    preset_path = (config_dir / candidate.name).resolve()
+    if preset_path.parent != config_dir or not preset_path.is_file():
         raise HTTPException(status_code=404, detail="Configuration not found")
     return preset_path
 
