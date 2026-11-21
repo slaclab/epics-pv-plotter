@@ -134,10 +134,15 @@ async def get_config():
     """get the complete configuration"""
     return load_config()
 
-
 def _preset_path(filename: str) -> Path:
-    filename = filename.strip()
+    preset_path = (config_dir / filename).resolve()
+    try:
+        preset_path.relative_to(config_dir)
+    except ValueError:
     candidate = Path(filename)
+
+    if not preset_path.is_file():
+        raise HTTPException(status_code=404, detail="Configuration not found")
     if (
         not filename
         or candidate.name != filename
