@@ -103,7 +103,10 @@ function ConfigPage() {
         setSelectedEgus(config.egus || {});
         setThresholds(asStrings);
         setValueFormats(config.value_formats || {});
-        setEnergyConfig(config.energy || DEFAULT_ENERGY_CONFIG);
+        setEnergyConfig({
+          ...DEFAULT_ENERGY_CONFIG,
+          ...(config.energy || {}),
+        });
         setLoading(false);
       })
       .catch((err) => {
