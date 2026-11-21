@@ -176,7 +176,16 @@ def _read_config_file(config_file: Path) -> dict:
 
 
 def resolve_config_file(filename: str | None = None) -> Path:
-    return CONFIG_FILE if filename is None else _preset_path(filename)
+    if filename is None:
+        return CONFIG_FILE
+
+    candidate = filename.strip()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Invalid configuration filename")
+    if Path(candidate).name != candidate or Path(candidate).is_absolute():
+        raise HTTPException(status_code=400, detail="Invalid configuration filename")
+
+    return _preset_path(candidate)
 
 
 @router.get("/config-presets")
