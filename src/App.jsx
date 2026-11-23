@@ -1,14 +1,28 @@
 // src/App.jsx
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { usePlotStore } from './stores/usePlotStore';
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { usePlotStore } from "./stores/usePlotStore";
 import { useLiveValueStore } from "./stores/useLiveValueStore";
 import { pvConnectionPool } from "./services/PVConnectionPool";
 
-import PlotGrid from './components/PlotGrid';
-import BeamlineStatus from './components/BeamlineStatus';
-import { Plus, Trash2, Activity, Clock, ChevronDown, ChevronUp, X, Pause, Play, Eye, EyeOff, Zap } from 'lucide-react';
-import './App.css';
+import PlotGrid from "./components/PlotGrid";
+import BeamlineStatus from "./components/BeamlineStatus";
+import {
+  Plus,
+  Trash2,
+  Activity,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Pause,
+  Play,
+  Eye,
+  EyeOff,
+  Zap,
+  Variable,
+} from "lucide-react";
+import "./App.css";
 import { configPresetUrl, energyConfigUrl } from "./utils/configApi";
 import { useConfigSync } from "./hooks/useConfigSync";
 import { formatPVValue } from "./utils/valueFormat";
@@ -32,18 +46,15 @@ function LivePVValue({
   canRemove,
   onRemove,
 }) {
-  const valueInfo = useLiveValueStore(
-    (state) => state.latestValues[pvName]
-  );
+  const valueInfo = useLiveValueStore((state) => state.latestValues[pvName]);
   const gasPressurePV = ionChamberGasPressurePV(pvName);
   const gasPressureInfo = useLiveValueStore((state) =>
-    gasPressurePV ? state.latestValues[gasPressurePV] : null
+    gasPressurePV ? state.latestValues[gasPressurePV] : null,
   );
 
   // null (e.g. an energy the gateway could not calculate) must show "---",
   // but Number(null) is 0, so map it to NaN first.
-  const numericValue =
-    valueInfo?.value == null ? NaN : Number(valueInfo.value);
+  const numericValue = valueInfo?.value == null ? NaN : Number(valueInfo.value);
   const energy = isEnergyPV(pvName);
   // Energy PVs always use eV; other PVs use the EGU saved on the Config page
   // ("default" or empty means no unit is shown)
@@ -71,13 +82,36 @@ function LivePVValue({
       <div
         className={`live-pv-name${displayName.length > 8 ? " live-pv-name-scroll" : ""}`}
       >
-        <div className="live-pv-name-container">{displayName}</div>
+        <div className="live-pv-name-container">
+          <div className="main-pv-name">{displayName}</div>
+          {gasPressurePV && (
+            <div className="gas-pressure-inline">
+              <div className="gas-pressure-name">
+                {/*gasPressureDisplayName || gasPressurePV*/}
+              </div>
+              <div className="gas-pressure-value">
+                {gasPressureInfo &&
+                Number.isFinite(Number(gasPressureInfo.value))
+                  ? formatPVValue(
+                      Number(gasPressureInfo.value),
+                      "regular",
+                      (value) => value.toFixed(2),
+                    )
+                  : "---"}
+                {gasPressureInfo &&
+                  Number.isFinite(Number(gasPressureInfo.value)) && (
+                    <span className="gas-pressure-unit"> bar</span>
+                  )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="pv-value">        
+      <div className="pv-value">
         {valueInfo && Number.isFinite(numericValue)
           ? formatPVValue(numericValue, valueFormat, (v) =>
-              v.toFixed(energy ? 2 : 5)
+              v.toFixed(energy ? 2 : 5),
             )
           : "---"}
         {unit && <span className="pv-egu"> {unit}</span>}
@@ -85,33 +119,7 @@ function LivePVValue({
 
       {valueInfo && (
         <div className="pv-time">
-          {new Date(
-            valueInfo.timestamp * 1000
-          ).toLocaleTimeString()}
-        </div>
-      )}
-
-      {gasPressurePV && (
-        <div className="gas-pressure-info">
-          <div className="gas-pressure-name">
-            Gas Pressure: {gasPressureDisplayName || gasPressurePV}
-          </div>
-          <div className="gas-pressure-value">
-            {gasPressureInfo && Number.isFinite(Number(gasPressureInfo.value))
-              ? `${formatPVValue(
-                  Number(gasPressureInfo.value),
-                  "regular",
-                  (value) => value.toFixed(5),
-                )}`
-              : "---"}
-          </div>
-          {gasPressureInfo && (
-            <div className="gas-pressure-time">
-              {new Date(
-                gasPressureInfo.timestamp * 1000
-              ).toLocaleTimeString()}
-            </div>
-          )}
+          {new Date(valueInfo.timestamp * 1000).toLocaleTimeString()}
         </div>
       )}
 
@@ -129,7 +137,6 @@ function LivePVValue({
   );
 }
 
-
 function LivePVSubscription({ pvName }) {
   useEffect(() => {
     const subscriptions = [pvName];
@@ -138,8 +145,8 @@ function LivePVSubscription({ pvName }) {
 
     const unsubscribes = subscriptions.map((subscriptionPV) =>
       pvConnectionPool.subscribe(subscriptionPV, {
-      // The connection pool updates useLiveValueStore once
-      // for every WebSocket message.
+        // The connection pool updates useLiveValueStore once
+        // for every WebSocket message.
         onData: () => {},
 
         onConnect: () => {
@@ -147,12 +154,9 @@ function LivePVSubscription({ pvName }) {
         },
 
         onError: (error) => {
-          console.error(
-            `[LIVE LIST] Error for ${subscriptionPV}:`,
-            error
-          );
+          console.error(`[LIVE LIST] Error for ${subscriptionPV}:`, error);
         },
-      })
+      }),
     );
 
     return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
@@ -161,66 +165,47 @@ function LivePVSubscription({ pvName }) {
   return null;
 }
 
-
 function App() {
-  const [pvInput, setPvInput] = useState('');
+  const [pvInput, setPvInput] = useState("");
   const [showInfo, setShowInfo] = useState(false);
 
-  const [selectedPlotSize, setSelectedPlotSize] = useState('1*1');
+  const [selectedPlotSize, setSelectedPlotSize] = useState("1*1");
   const plotsize_options = [
-    { value: '1*1', label: '1*1', width: 1, height: 1 },
-    { value: '1*2', label: '1*2', width: 1, height: 2 },
-    { value: '2*1', label: '2*1', width: 2, height: 1 },
-    { value: '2*2', label: '2*2', width: 2, height: 2 },
+    { value: "1*1", label: "1*1", width: 1, height: 1 },
+    { value: "1*2", label: "1*2", width: 1, height: 2 },
+    { value: "2*1", label: "2*1", width: 2, height: 1 },
+    { value: "2*2", label: "2*2", width: 2, height: 2 },
   ];
   //handle change events when a user picks an option
   const handlePlotSizeChange = (event) => {
     setSelectedPlotSize(event.target.value);
   };
-  const [saveStatus, setSaveStatus] = useState('');
-	
-  const handleSavePlotConfigBk = (event) =>{
+  const [saveStatus, setSaveStatus] = useState("");
+
+  const handleSavePlotConfigBk = (event) => {
     console.log("save the plots configuration");
   };
   const plots = usePlotStore((state) => state.plots);
   const addPlot = usePlotStore((state) => state.addPlot);
   const clearAll = usePlotStore((state) => state.clearAll);
-  
-  const timeSyncEnabled = usePlotStore(
-    (state) => state.timeSyncEnabled
-  );
-  
-  const globalTimeWindow = usePlotStore(
-    (state) => state.globalTimeWindow
-  );
-  
-  const toggleTimeSync = usePlotStore(
-    (state) => state.toggleTimeSync
-  );
-  
-  const setTimeWindow = usePlotStore(
-    (state) => state.setTimeWindow
-  );
 
-  const plotsPaused = usePlotStore(
-    (state) => state.plotsPaused
-  );
+  const timeSyncEnabled = usePlotStore((state) => state.timeSyncEnabled);
 
-  const togglePlotsPaused = usePlotStore(
-    (state) => state.togglePlotsPaused
-  );
+  const globalTimeWindow = usePlotStore((state) => state.globalTimeWindow);
 
-  const livePVNames = usePlotStore(
-    (state) => state.livePVNames
-  );
+  const toggleTimeSync = usePlotStore((state) => state.toggleTimeSync);
 
-  const addLivePVs = usePlotStore(
-    (state) => state.addLivePVs
-  );
+  const setTimeWindow = usePlotStore((state) => state.setTimeWindow);
 
-  const removeLivePV = usePlotStore(
-    (state) => state.removeLivePV
-  );
+  const plotsPaused = usePlotStore((state) => state.plotsPaused);
+
+  const togglePlotsPaused = usePlotStore((state) => state.togglePlotsPaused);
+
+  const livePVNames = usePlotStore((state) => state.livePVNames);
+
+  const addLivePVs = usePlotStore((state) => state.addLivePVs);
+
+  const removeLivePV = usePlotStore((state) => state.removeLivePV);
 
   const navigate = useNavigate();
 
@@ -246,7 +231,7 @@ function App() {
 
   // Apply a layout's saved visibility from an explicit user load
   const applyLayoutBeamlineStatus = (layout) => {
-    if (typeof layout?.showBeamlineStatus !== 'boolean') return;
+    if (typeof layout?.showBeamlineStatus !== "boolean") return;
     beamlineStatusChosenRef.current = true;
     setShowBeamlineStatus(layout.showBeamlineStatus);
   };
@@ -274,7 +259,7 @@ function App() {
         if (!active) return;
         const layout = data?.layouts?.default;
         if (
-          typeof layout?.showBeamlineStatus === 'boolean' &&
+          typeof layout?.showBeamlineStatus === "boolean" &&
           !beamlineStatusChosenRef.current
         ) {
           setShowBeamlineStatus(layout.showBeamlineStatus);
@@ -325,19 +310,19 @@ function App() {
   };
 
   const handleDirectToConfig = () => {
-    navigate('/config');
+    navigate("/config");
   };
 
   const handleSavePlotConfig = async () => {
     try {
-      console.log("saving the plot configurations")
-      setSaveStatus('Saving...');
+      console.log("saving the plot configurations");
+      setSaveStatus("Saving...");
 
       //Save Plot Layouts
-    
+
       const res = await fetch(configPresetUrl(activeConfigFile), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           layouts: {
             default: {
@@ -349,16 +334,15 @@ function App() {
           },
         }),
       });
-      if (!res.ok) throw new Error('Save failed');
+      if (!res.ok) throw new Error("Save failed");
       bumpSettingsRevision();
-      setSaveStatus('Saved!');
-      setTimeout(() => setSaveStatus(''), 2000);
+      setSaveStatus("Saved!");
+      setTimeout(() => setSaveStatus(""), 2000);
     } catch (err) {
       console.error(err);
-      setSaveStatus('Save failed');
+      setSaveStatus("Save failed");
     }
   };
-
 
   useEffect(() => {
     if (plots.length > 0) {
@@ -373,38 +357,32 @@ function App() {
       .map((pvName) => pvName.trim())
       .filter(Boolean);
 
-
   //function to handle adding Plots and  PV latest values
   const handleAddPlot = () => {
     const pvNames = parsePVNames(pvInput);
-  
+
     if (pvNames.length === 0) {
       alert("Please enter valid PV name(s)");
       return;
     }
-  
+
     const option =
-      plotsize_options.find(
-        (item) => item.value === selectedPlotSize
-      ) ?? plotsize_options[0];
-  
-    addPlot(
-      pvNames,
-      option.width,
-      option.height
-    );
-  
+      plotsize_options.find((item) => item.value === selectedPlotSize) ??
+      plotsize_options[0];
+
+    addPlot(pvNames, option.width, option.height);
+
     setPvInput("");
-  };	
-  	
+  };
+
   const handleAddLivePV = () => {
     const pvNames = parsePVNames(pvInput);
-  
+
     if (pvNames.length === 0) {
       alert("Please enter valid PV name(s)");
       return;
     }
-  
+
     addLivePVs(pvNames);
     setPvInput("");
   };
@@ -442,7 +420,9 @@ function App() {
       if (livePVNames.includes(energyName)) {
         // The open stream keeps its old encoder until it reconnects
         if (encoder !== energyConfig.encoder_pv) {
-          alert(`Encoder set to ${encoder}. Reload the page to apply it to ${energyName}.`);
+          alert(
+            `Encoder set to ${encoder}. Reload the page to apply it to ${energyName}.`,
+          );
         }
       } else {
         addLivePVs([energyName]);
@@ -460,40 +440,25 @@ function App() {
     }
   };
 
-
   const handleClearAll = () => {
-    if (
-      plots.length === 0 &&
-      livePVNames.length === 0
-    ) {
+    if (plots.length === 0 && livePVNames.length === 0) {
       return;
     }
-  
+
     if (
-      window.confirm(
-        "Are you sure you want to clear all plots and live PVs?"
-      )
+      window.confirm("Are you sure you want to clear all plots and live PVs?")
     ) {
       clearAll();
-  
-      console.log(
-        "All plots and live PVs cleared"
-      );
+
+      console.log("All plots and live PVs cleared");
     }
   };
 
-  const plotPVNames = plots.flatMap(
-    (plot) => plot.pvNames
-  );
+  const plotPVNames = plots.flatMap((plot) => plot.pvNames);
 
   const displayedPVNames = Array.from(
-    new Set([
-      ...plotPVNames,
-      ...livePVNames,
-    ])
+    new Set([...plotPVNames, ...livePVNames]),
   );
-
-
 
   return (
     <div className="app">
@@ -515,7 +480,6 @@ function App() {
         />
       ))}
 
-
       <div className="control-panel">
         <div className="input-group">
           <input
@@ -524,35 +488,43 @@ function App() {
             placeholder="Enter PV name (e.g., IOC:ai1 or IOC:ai1,IOC:ai2 for multi-PV plot)"
             value={pvInput}
             onChange={(e) => setPvInput(e.target.value)}
-	    onKeyDown={handleKeyDown}
+            onKeyDown={handleKeyDown}
           />
-	<select className="plot-size-select" value={selectedPlotSize} onChange={handlePlotSizeChange}>
-           <option value="" disabled>-- Choose an option --</option>
-        
-           {plotsize_options.map((option) => (
-             <option key={option.value} value={option.value}>
-               {option.label}
-             </option>
-           ))}
-         </select>
+          <select
+            className="plot-size-select"
+            value={selectedPlotSize}
+            onChange={handlePlotSizeChange}
+          >
+            <option value="" disabled>
+              -- Choose an option --
+            </option>
+
+            {plotsize_options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
 
           <button
             className="btn btn-primary"
             onClick={handleAddPlot}
             disabled={!pvInput.trim()}
           >
+            <Plus size={18} />
             <Activity size={18} />
-            Add Plot
+            {/*Add Plot*/}
           </button>
-	  <button
-	    className="btn btn-secondary"
-	    onClick={handleAddLivePV}
-	    disabled={!pvInput.trim()}
-	  >
-	    <Plus size={18} />
-	    Add Live PV
-	  </button>
-	  {/*
+          <button
+            className="btn btn-secondary"
+            onClick={handleAddLivePV}
+            disabled={!pvInput.trim()}
+          >
+            <Plus size={18} />
+            <Variable size={18} />
+            {/*Add Live PV*/}
+          </button>
+          {/*
 	  <button
 	    className="btn btn-secondary"
 	    onClick={handleAddEnergy}
@@ -568,7 +540,7 @@ function App() {
             disabled={plots.length === 0 && livePVNames.length === 0}
           >
             <Trash2 size={18} />
-            Clear All
+            {/*Clear All*/}
           </button>
           {/* 
           <button
@@ -585,26 +557,35 @@ function App() {
 
           {/* Pause/resume plot redraws; data keeps buffering while paused */}
           <button
-            className={`btn ${plotsPaused ? 'btn-success' : 'btn-secondary'}`}
+            className={`btn ${plotsPaused ? "btn-success" : "btn-secondary"}`}
             onClick={togglePlotsPaused}
-            title={plotsPaused ? 'Resume live plot updates' : 'Freeze all plots for analysis'}
+            title={
+              plotsPaused
+                ? "Resume live plot updates"
+                : "Freeze all plots for analysis"
+            }
           >
             {plotsPaused ? <Play size={18} /> : <Pause size={18} />}
-            {plotsPaused ? 'Resume Plots' : 'Pause Plots'}
+            {/*plotsPaused ? 'Resume Plots' : 'Pause Plots'*/}
+            {plotsPaused ? "" : ""}
           </button>
 
           {/* Show/hide the Beamline Status table (hidden by default) */}
           <button
-            className={`btn ${showBeamlineStatus ? 'btn-success' : 'btn-secondary'}`}
+            className={`btn ${showBeamlineStatus ? "btn-success" : "btn-secondary"}`}
             onClick={toggleBeamlineStatus}
-            title={showBeamlineStatus ? 'Hide beamline status table' : 'Show beamline status table'}
+            title={
+              showBeamlineStatus
+                ? "Hide beamline status table"
+                : "Show beamline status table"
+            }
           >
             {showBeamlineStatus ? <EyeOff size={18} /> : <Eye size={18} />}
-            {showBeamlineStatus ? 'Hide Beamline Status' : 'Show Beamline Status'}
+            {showBeamlineStatus ? "Hide" : "Show"}
           </button>
 
           {/* Time Synchronization Controls - Now Inline */}
-	  {/*
+          {/*
           <button
             className={`btn ${timeSyncEnabled ? 'btn-success' : 'btn-secondary'}`}
             onClick={toggleTimeSync}
@@ -617,8 +598,8 @@ function App() {
           {timeSyncEnabled && (
             <>
               <label className="time-window-label">Time Window:</label>
-              <select 
-                value={globalTimeWindow} 
+              <select
+                value={globalTimeWindow}
                 onChange={(e) => setTimeWindow(Number(e.target.value))}
                 className="time-window-select"
               >
@@ -632,23 +613,17 @@ function App() {
               </select>
             </>
           )}
-	  <button
-	    className="btn btn-third"
-	    onClick={handleDirectToConfig}
-	  >
-		PV Configurations
-	  </button>
-	  <div className="control-save">
-	    <button
-	      className="btn btn-fourth"
-	      onClick={handleSavePlotConfig}
-	    >
-	      Save Plot Configurations
-	    </button>
-              {saveStatus && (
-                <span style={{ marginLeft: '10px' }}>{saveStatus}</span>
-              )}
-          </div> 
+          <button className="btn btn-third" onClick={handleDirectToConfig}>
+            PV Settings
+          </button>
+          <div className="control-save">
+            <button className="btn btn-fourth" onClick={handleSavePlotConfig}>
+              Save
+            </button>
+            {saveStatus && (
+              <span style={{ marginLeft: "10px" }}>{saveStatus}</span>
+            )}
+          </div>
         </div>
 
         {/* Collapsible Info Panel */}
@@ -660,35 +635,36 @@ function App() {
             </div>
             <div className="info-item">
               <div className="info-label">Monitored PVs</div>
-              <div className="info-value">
-		{displayedPVNames.length}
-              </div>
+              <div className="info-value">{displayedPVNames.length}</div>
             </div>
           </div>
         )}
       </div>
 
-      <div className="main-content" style={{ 
-        display: 'flex', 
-        flex: 1, 
-        overflow: 'hidden',
-        //minHeight: 'calc(100vh - 80px)'   // adjust the height
-      }}>
-      
-        {/* Beamline status + Plot */}
-        <div style={{
+      <div
+        className="main-content"
+        style={{
+          display: "flex",
           flex: 1,
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
+          overflow: "hidden",
+          //minHeight: 'calc(100vh - 80px)'   // adjust the height
+        }}
+      >
+        {/* Beamline status + Plot */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
           {showBeamlineStatus && <BeamlineStatus />}
-          <div style={{ flex: 1, overflow: 'auto' }}>
+          <div style={{ flex: 1, overflow: "auto" }}>
             <PlotGrid onLayoutLoaded={applyLayoutBeamlineStatus} />
           </div>
         </div>
-
 
         <div className="right-sidebar">
           <div className="sidebar-header">
@@ -702,7 +678,7 @@ function App() {
               {showAlias ? "Show PV Names" : "Show Aliases"}
             </button>
           </div>
-        
+
           <div className="sidebar-content">
             {displayedPVNames.map((pvName) => (
               <LivePVValue
@@ -724,22 +700,8 @@ function App() {
             ))}
           </div>
         </div>
-
-
-
       </div>
     </div>
-
-
-
-
-
-
-
-
-
-
-
   );
 }
 

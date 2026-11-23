@@ -29,6 +29,8 @@ export default function PlotGrid({ onLayoutLoaded }) {
   const [selectedConfig, setSelectedConfig] = useState("");
   const [configError, setConfigError] = useState("");
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
+  const [saveAsFilename, setSaveAsFilename] = useState("");
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -97,6 +99,7 @@ export default function PlotGrid({ onLayoutLoaded }) {
       onLayoutLoaded?.(layout);
       loadLayout(layout);
       setActiveConfigFile(filename);
+      setSelectedConfig(filename === "config.json" ? "" : filename);
       pvConnectionPool.reconnectEnergyConnections();
       bumpSettingsRevision();
     } catch (error) {
@@ -104,6 +107,57 @@ export default function PlotGrid({ onLayoutLoaded }) {
       setConfigError(`Failed to load ${filename}: ${error.message}`);
     } finally {
       setIsLoadingConfig(false);
+    }
+  };
+
+  const handleSaveAsConfig = async () => {
+    const filename = saveAsFilename.trim();
+    if (!filename) return;
+
+    setIsSavingConfig(true);
+    setConfigError("");
+    try {
+      const layoutResponse = await fetch(configPresetUrl(activeConfigFile), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          layouts: {
+            default: {
+              plots,
+              livePVNames: usePlotStore.getState().livePVNames,
+              globalTimeWindow: usePlotStore.getState().globalTimeWindow,
+            },
+          },
+        }),
+      });
+      if (!layoutResponse.ok) {
+        throw new Error(
+          `Could not save the current layout (HTTP ${layoutResponse.status})`,
+        );
+      }
+
+      const params = new URLSearchParams({ source: activeConfigFile });
+      const response = await fetch(
+        `${configPresetUrl(filename)}?${params.toString()}`,
+        { method: "POST" },
+      );
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || `HTTP ${response.status}`);
+      }
+
+      setConfigFiles((current) =>
+        current.includes(filename) ? current : [...current, filename].sort(),
+      );
+      setSelectedConfig(filename);
+      setSaveAsFilename("");
+      setActiveConfigFile(filename);
+      bumpSettingsRevision();
+    } catch (error) {
+      console.error(`Failed to save configuration as ${filename}:`, error);
+      setConfigError(`Failed to save ${filename}: ${error.message}`);
+    } finally {
+      setIsSavingConfig(false);
     }
   };
 
@@ -142,6 +196,23 @@ export default function PlotGrid({ onLayoutLoaded }) {
           disabled={!selectedConfig || isLoadingConfig}
         >
           {isLoadingConfig ? "Loading..." : "Load Selected Configuration"}
+        </button>
+      </div>
+      <div className="config-save-as">
+        <input
+          type="text"
+          aria-label="New configuration filename"
+          value={saveAsFilename}
+          onChange={(event) => setSaveAsFilename(event.target.value)}
+          placeholder="config3.json"
+          disabled={isSavingConfig}
+        />
+        <button
+          type="button"
+          onClick={handleSaveAsConfig}
+          disabled={!saveAsFilename.trim() || isSavingConfig}
+        >
+          {isSavingConfig ? "Saving..." : "Save As"}
         </button>
       </div>
       {configError && (

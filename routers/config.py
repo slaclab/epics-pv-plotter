@@ -237,6 +237,26 @@ async def get_config_preset(filename: str):
     return _read_config_file(_preset_path(filename))
 
 
+@router.post("/config-presets/{filename}")
+async def create_config_preset(filename: str, source: str | None = None):
+    """create a named preset, optionally as a copy of an existing preset"""
+    preset_path = _preset_path_placeholder(filename)
+    source_path = _preset_path(source) if source else CONFIG_FILE
+    source_config = _read_config_file(source_path)
+
+    with config_lock(preset_path):
+        if preset_path.exists():
+            raise HTTPException(status_code=409, detail="Configuration already exists")
+        save_config(copy.deepcopy(source_config), preset_path)
+    return {"status": "ok", "filename": filename}
+
+
+def _preset_path_placeholder(filename: str) -> Path:
+    if not _SAFE_CONFIG_FILENAME.fullmatch(filename):
+        raise HTTPException(status_code=400, detail="Invalid configuration filename")
+    return CONFIG_FILE.parent / filename
+
+
 @router.patch("/config-presets/{filename}")
 async def update_config_preset(filename: str, updates: Dict[str, Any]):
     """update selected configuration sections without replacing other sections"""

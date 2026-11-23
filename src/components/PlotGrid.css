@@ -27,7 +27,6 @@
   min-height: fit-content;
 }
 
-
 /* Ensure grid items don't overflow */
 .react-grid-item {
   box-sizing: border-box;
@@ -109,14 +108,14 @@
   padding: 0.5rem 1rem;
   margin: 0.5rem 0.25rem;
   border-radius: 6px;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .btn-load-config {
-  background: linear-gradient(135deg, #66CC99 0%, #99cc99 100%);
-  padding: 1.rem;
+  background: linear-gradient(135deg, #66cc99 0%, #99cc99 100%);
+  padding: 1rem;
   border-radius: 12px;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -139,6 +138,20 @@
 
 .config-preset-controls select,
 .config-preset-controls button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+}
+
+.config-save-as {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.config-save-as input,
+.config-save-as button {
   padding: 0.5rem 0.75rem;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 6px;

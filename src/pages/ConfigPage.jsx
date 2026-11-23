@@ -519,6 +519,7 @@ function ConfigPage() {
                             <option value="Volts">Volts</option>
                             <option value="mA">mA</option>
                             <option value="Counts">Counts</option>
+                            <option value="bar">bar</option>
                             <option value="eV">eV</option>
                           </select>
                         </div>

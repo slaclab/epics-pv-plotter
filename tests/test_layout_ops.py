@@ -203,6 +203,27 @@ def test_missing_config_preset_returns_404(client):
     assert client.get("/api/config-presets/not-found.json").status_code == 404
 
 
+def test_named_config_preset_can_be_created_as_a_copy(client):
+    preset = config_router.CONFIG_FILE.parent / "config1.json"
+    preset.write_text(json.dumps({
+        "aliases": {"A": "I0"},
+        "layouts": {"default": {"plots": [{"id": 1, "pvNames": ["A"]}]}},
+    }))
+
+    response = client.post(
+        "/api/config-presets/config3.json",
+        params={"source": "config1.json"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["filename"] == "config3.json"
+    copied = json.loads(
+        (config_router.CONFIG_FILE.parent / "config3.json").read_text()
+    )
+    assert copied["aliases"] == {"A": "I0"}
+    assert copied["layouts"]["default"]["plots"][0]["pvNames"] == ["A"]
+
+
 def test_fresh_install_creates_default_preset(tmp_path, monkeypatch):
     config_dir = tmp_path / "configs"
     monkeypatch.setattr(config_router, "CONFIG_FILE", config_dir / "config.json")
