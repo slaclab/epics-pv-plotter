@@ -25,6 +25,7 @@ import { ionChamberGasPressurePV } from "./utils/ionChamber";
 function LivePVValue({
   pvName,
   displayName,
+  gasPressureDisplayName,
   threshold,
   valueFormat,
   egu,
@@ -92,7 +93,9 @@ function LivePVValue({
 
       {gasPressurePV && (
         <div className="gas-pressure-info">
-          <div className="gas-pressure-name">Gas Pressure: {gasPressurePV}</div>
+          <div className="gas-pressure-name">
+            Gas Pressure: {gasPressureDisplayName || gasPressurePV}
+          </div>
           <div className="gas-pressure-value">
             {gasPressureInfo && Number.isFinite(Number(gasPressureInfo.value))
               ? `${formatPVValue(
@@ -706,6 +709,12 @@ function App() {
                 key={pvName}
                 pvName={pvName}
                 displayName={getDisplayName(pvName)}
+                gasPressureDisplayName={
+                  showAlias
+                    ? aliases[ionChamberGasPressurePV(pvName)] ||
+                      ionChamberGasPressurePV(pvName)
+                    : ionChamberGasPressurePV(pvName)
+                }
                 threshold={thresholds[pvName]}
                 valueFormat={valueFormats[pvName]}
                 egu={egus[pvName]}
