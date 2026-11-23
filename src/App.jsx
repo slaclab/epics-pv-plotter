@@ -19,6 +19,7 @@ import {
   energyDisplayName,
   ENERGY_EGU,
 } from "./utils/energy";
+import { ionChamberGasPressurePV } from "./utils/ionChamber";
 // Relative path: nginx proxies /api to the backend on the same origin.
 
 function LivePVValue({
@@ -32,6 +33,10 @@ function LivePVValue({
 }) {
   const valueInfo = useLiveValueStore(
     (state) => state.latestValues[pvName]
+  );
+  const gasPressurePV = ionChamberGasPressurePV(pvName);
+  const gasPressureInfo = useLiveValueStore((state) =>
+    gasPressurePV ? state.latestValues[gasPressurePV] : null
   );
 
   // null (e.g. an energy the gateway could not calculate) must show "---",
@@ -85,6 +90,28 @@ function LivePVValue({
         </div>
       )}
 
+      {gasPressurePV && (
+        <div className="gas-pressure-info">
+          <div className="gas-pressure-name">Gas Pressure: {gasPressurePV}</div>
+          <div className="gas-pressure-value">
+            {gasPressureInfo && Number.isFinite(Number(gasPressureInfo.value))
+              ? `${formatPVValue(
+                  Number(gasPressureInfo.value),
+                  "regular",
+                  (value) => value.toFixed(5),
+                )}`
+              : "---"}
+          </div>
+          {gasPressureInfo && (
+            <div className="gas-pressure-time">
+              {new Date(
+                gasPressureInfo.timestamp * 1000
+              ).toLocaleTimeString()}
+            </div>
+          )}
+        </div>
+      )}
+
       {canRemove && (
         <button
           type="button"
@@ -102,24 +129,30 @@ function LivePVValue({
 
 function LivePVSubscription({ pvName }) {
   useEffect(() => {
-    const unsubscribe = pvConnectionPool.subscribe(pvName, {
+    const subscriptions = [pvName];
+    const gasPressurePV = ionChamberGasPressurePV(pvName);
+    if (gasPressurePV) subscriptions.push(gasPressurePV);
+
+    const unsubscribes = subscriptions.map((subscriptionPV) =>
+      pvConnectionPool.subscribe(subscriptionPV, {
       // The connection pool updates useLiveValueStore once
       // for every WebSocket message.
-      onData: () => {},
+        onData: () => {},
 
-      onConnect: () => {
-        console.log(`[LIVE LIST] Connected: ${pvName}`);
-      },
+        onConnect: () => {
+          console.log(`[LIVE LIST] Connected: ${subscriptionPV}`);
+        },
 
-      onError: (error) => {
-        console.error(
-          `[LIVE LIST] Error for ${pvName}:`,
-          error
-        );
-      },
-    });
+        onError: (error) => {
+          console.error(
+            `[LIVE LIST] Error for ${subscriptionPV}:`,
+            error
+          );
+        },
+      })
+    );
 
-    return unsubscribe;
+    return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
   }, [pvName]);
 
   return null;
@@ -472,7 +505,7 @@ function App() {
         </div>
       </header>
       */}
-      {livePVNames.map((pvName) => (
+      {displayedPVNames.map((pvName) => (
         <LivePVSubscription
           key={`live-subscription-${pvName}`}
           pvName={pvName}

@@ -71,6 +71,25 @@ test("adds multiple PVs to one plot", async ({ page }) => {
   await expect(sidebar).toContainText("TEST:PV:02");
 });
 
+test("shows the matching gas pressure PV for an ion chamber ADC", async ({ page }) => {
+  await page
+    .getByPlaceholder(/Enter PV name/i)
+    .fill("BL22:SCAN:MASTER:ADC2");
+
+  await page
+    .getByRole("button", {
+      name: /Add Plot/i,
+    })
+    .click();
+
+  const adcPanel = page
+    .locator(".value-item")
+    .filter({ hasText: "BL22:SCAN:MASTER:ADC2" });
+
+  await expect(adcPanel).toContainText("Gas Pressure");
+  await expect(adcPanel).toContainText("BL22:GAS:IC2P");
+});
+
 test("clears all plots", async ({ page }) => {
   await page
     .getByPlaceholder(/Enter PV name/i)

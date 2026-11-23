@@ -517,6 +517,35 @@ html, body {
   position: relative;
 }
 
+.value-item:has(.gas-pressure-info) {
+  min-height: 185px;
+  padding-bottom: 0.85rem;
+}
+
+.gas-pressure-info {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid #dfe5ec;
+  color: #475569;
+}
+
+.gas-pressure-name {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.gas-pressure-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f766e;
+  line-height: 1.1;
+}
+
+.gas-pressure-time {
+  font-size: 0.75rem;
+  color: #888;
+}
+
 .value-item.value-item-alarm {
   background: #fee2e2;
   border-color: #ef4444;
