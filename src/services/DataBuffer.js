@@ -80,6 +80,7 @@ export class DataBuffer {
     this.timestamps = [];
     this.values = [];
     this.totalPointsReceived = 0;
+    this.hadBadTimestamp = false;
   }
 
   getLatestValue() {

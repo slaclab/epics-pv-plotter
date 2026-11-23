@@ -7,11 +7,11 @@ import { X, Wifi, WifiOff, AlertCircle, Download } from "lucide-react";
 import { DataBuffer } from "../services/DataBuffer";
 import { pvConnectionPool } from "../services/PVConnectionPool";
 import {
-  API_BASE,
   PLOT_CONFIG,
   PLOT_THEME,
   getPVColor,
 } from "../utils/constants";
+import { configPresetUrl } from "../utils/configApi";
 import { usePlotStore } from "../stores/usePlotStore";
 import {
   isExponential,
@@ -35,23 +35,34 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const [valueFormats, setValueFormats] = useState({});
   const badTimestampWarnedRef = useRef(false);
   const settingsRevision = usePlotStore((state) => state.settingsRevision);
+  const activeConfigFile = usePlotStore((state) => state.activeConfigFile);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/egus`)
-      .then((res) => res.json())
-      .then((data) => setEgus(data || {}))
-      .catch((err) => console.error("Failed to load EGUs:", err));
+    let active = true;
+    fetch(configPresetUrl(activeConfigFile))
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((config) => {
+        if (!active) return;
+        setEgus(config?.egus || {});
+        setValueFormats(config?.value_formats || {});
+        setAliases(config?.aliases || {});
+      })
+      .catch((err) => {
+        if (active) {
+          console.error(
+            `Failed to load plot settings from ${activeConfigFile}:`,
+            err,
+          );
+        }
+      });
 
-    fetch(`${API_BASE}/api/value-formats`)
-      .then((res) => res.json())
-      .then((data) => setValueFormats(data || {}))
-      .catch((err) => console.error("Failed to load value formats:", err));
-
-    fetch(`${API_BASE}/api/aliases`)
-      .then((res) => res.json())
-      .then((data) => setAliases(data || {}))
-      .catch((err) => console.error("Failed to load aliases:", err));
-  }, [settingsRevision]);
+    return () => {
+      active = false;
+    };
+  }, [settingsRevision, activeConfigFile]);
 
   //
   const [showAlias, setShowAlias] = useState(true);
@@ -295,6 +306,13 @@ export default function MultiPVPlot({ plotId, pvNames }) {
           },
           onConnect: () => {
             setConnectionStatus((prev) => ({ ...prev, [pvName]: "connected" }));
+          },
+          onReset: () => {
+            buffersRef.current[pvName]?.clear();
+            setConnectionStatus((prev) => ({
+              ...prev,
+              [pvName]: "connecting",
+            }));
           },
         });
 

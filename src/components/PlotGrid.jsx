@@ -1,10 +1,12 @@
 // src/components/PlotGrid.jsx
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 
 import { usePlotStore } from "../stores/usePlotStore";
+import { pvConnectionPool } from "../services/PVConnectionPool";
 import MultiPVPlot from "./MultiPVPlot";
-import { PLOT_CONFIG } from "../utils/constants";
+import { API_BASE, PLOT_CONFIG } from "../utils/constants";
+import { configPresetUrl } from "../utils/configApi";
 
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -16,6 +18,53 @@ export default function PlotGrid({ onLayoutLoaded }) {
   const plots = usePlotStore((state) => state.plots);
   const updateLayout = usePlotStore((state) => state.updateLayout);
   const loadLayout = usePlotStore((state) => state.loadLayout);
+  const activeConfigFile = usePlotStore((state) => state.activeConfigFile);
+  const setActiveConfigFile = usePlotStore(
+    (state) => state.setActiveConfigFile,
+  );
+  const bumpSettingsRevision = usePlotStore(
+    (state) => state.bumpSettingsRevision,
+  );
+  const [configFiles, setConfigFiles] = useState([]);
+  const [selectedConfig, setSelectedConfig] = useState("");
+  const [configError, setConfigError] = useState("");
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    fetch(`${API_BASE}/api/config-presets`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (!Array.isArray(data.files)) {
+          throw new Error("The server returned an invalid configuration list");
+        }
+        if (active) {
+          setConfigFiles(data.files);
+          setSelectedConfig(
+            activeConfigFile !== "config.json" &&
+              data.files.includes(activeConfigFile)
+              ? activeConfigFile
+              : "",
+          );
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setConfigError(`Failed to load configuration list: ${error.message}`);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeConfigFile]);
+
   const layout = useMemo(
     () =>
       plots.map((plot) => ({
@@ -30,36 +79,79 @@ export default function PlotGrid({ onLayoutLoaded }) {
       })),
     [plots],
   );
-  const handleStandardConfigLoad = async () => {
-    console.log("Loading Standard Configurations");
-    // Relative path: nginx proxies /api to the backend on the same origin.
-    const API_BASE = "";
-
+  const handleConfigLoad = async (filename = "config.json") => {
+    setIsLoadingConfig(true);
+    setConfigError("");
     try {
-      const response = await fetch(`${API_BASE}/api/config`);
+      const response = await fetch(configPresetUrl(filename));
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log("Success:", data);
-
-      const layout = data.layouts.default; // whole layout object
-      console.log("Incoming layout:", layout);
-
-      // Non-plot settings do not require any plots.
-      if (layout) onLayoutLoaded?.(layout);
-
-      if (layout && layout.plots && layout.plots.length > 0) {
-        usePlotStore.getState().loadLayout(layout); // whole layout object
-        console.log("Successfully loaded layout!");
-      } else {
-        console.warn("No plots found in the default layout.");
+      const config = await response.json();
+      const layout = config?.layouts?.default;
+      if (!layout || typeof layout !== "object") {
+        throw new Error("The selected configuration has no default layout");
       }
+
+      onLayoutLoaded?.(layout);
+      loadLayout(layout);
+      setActiveConfigFile(filename);
+      pvConnectionPool.reconnectEnergyConnections();
+      bumpSettingsRevision();
     } catch (error) {
-      console.error("Failed to load configuration:", error.message);
+      console.error(`Failed to load configuration ${filename}:`, error);
+      setConfigError(`Failed to load ${filename}: ${error.message}`);
+    } finally {
+      setIsLoadingConfig(false);
     }
   };
+
+  const configControls = (
+    <div className="config-loader">
+      <button
+        className="btn-load-config"
+        onClick={() => handleConfigLoad()}
+        disabled={isLoadingConfig}
+      >
+        Load Standard Configuration
+      </button>
+      <div className="config-preset-controls">
+        <select
+          aria-label="Configuration preset"
+          value={selectedConfig}
+          onChange={(event) => setSelectedConfig(event.target.value)}
+          disabled={isLoadingConfig || configFiles.length === 0}
+        >
+          <option value="">
+            {configFiles.length === 0
+              ? "No configuration presets found"
+              : "Select a configuration"}
+          </option>
+          {configFiles
+            .filter((filename) => filename !== "config.json")
+            .map((filename) => (
+              <option key={filename} value={filename}>
+                {filename}
+              </option>
+            ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => handleConfigLoad(selectedConfig)}
+          disabled={!selectedConfig || isLoadingConfig}
+        >
+          {isLoadingConfig ? "Loading..." : "Load Selected Configuration"}
+        </button>
+      </div>
+      {configError && (
+        <p className="config-load-error" role="alert">
+          {configError}
+        </p>
+      )}
+    </div>
+  );
+
   //if not plots, show the default panel
   if (plots.length === 0) {
     return (
@@ -76,14 +168,7 @@ export default function PlotGrid({ onLayoutLoaded }) {
               <code>BEAM:CURRENT</code>
             </div>
             <p> Or</p>
-            <div>
-              <button
-                className="btn-load-config"
-                onClick={handleStandardConfigLoad}
-              >
-                Load Standord Configurations
-              </button>
-            </div>
+            {configControls}
           </div>
         </div>
       </div>
@@ -92,6 +177,7 @@ export default function PlotGrid({ onLayoutLoaded }) {
 
   return (
     <div className="plot-grid-container">
+      {configControls}
       <ResponsiveGridLayout
         className="plot-grid"
         layouts={{ lg: layout }}

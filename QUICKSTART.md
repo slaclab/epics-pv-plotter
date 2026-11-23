@@ -40,13 +40,19 @@ reach them, copy `.env.example` to `.env` and set `EPICS_CA_ADDR_LIST`
 (and `EPICS_CA_AUTO_ADDR_LIST=NO`) to the IOC addresses directly.
 
 ### Persisting configuration
-`config.json` (PV aliases, EGUs, thresholds, saved layouts) is bind-mounted
-into the backend container, so it persists across rebuilds/restarts and can be
-edited directly on the host. It holds user-saved settings, so it is not tracked
-by git - create it from the template before the first `docker compose up`
-(otherwise Docker creates a directory named `config.json` in its place):
+`configs/` is bind-mounted into the backend container, so configuration files
+persist across rebuilds/restarts and can be edited directly on the host.
+`configs/config.json` is the default configuration; additional JSON files in
+that folder appear as selectable presets in the plotter. Loading a preset makes
+it the active save target for Config Page settings, energy settings, and saved
+plot layouts. The backend initializes a default when needed and, on native
+installs, migrates an existing root-level
+`config.json` the first time the new default is requested. It never replaces
+an existing `configs/config.json`. To pre-create the default before the first
+`docker compose up`:
 ```bash
-cp config.example.json config.json
+mkdir -p configs
+cp config.example.json configs/config.json
 ```
 
 ### Updating after a code change
@@ -62,7 +68,9 @@ Run the native deployment script on each intermediate server, from its current
 `~/Documents/epics-pv-plotter`, then restarts the existing gateway and
 frontend systemd services. It verifies each restarted service is active before
 reporting success. It does not use Docker, install dependencies on the Pi, or
-overwrite `config.json`.
+overwrite configuration files. An existing root-level `config.json` is
+migrated to `configs/config.json` on the Pi when the application first loads
+the default preset.
 
 On each intermediate server, configure SSH key access to its Pi and create a
 local inventory with the Pi's hostname and username:
