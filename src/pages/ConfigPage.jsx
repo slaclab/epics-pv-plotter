@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { usePlotStore } from "../stores/usePlotStore";
 import { configPresetUrl, energyConfigUrl } from "../utils/configApi";
 import { DEFAULT_ENERGY_CONFIG } from "../utils/energy";
+import { ionChamberGasPressurePV } from "../utils/ionChamber";
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -43,6 +44,12 @@ function ConfigPage() {
   const plotPVNames = plots.flatMap((plot) => plot.pvNames);
   const displayedPVNames = Array.from(
     new Set([...plotPVNames, ...livePVNames]),
+  );
+  const gasPressurePVNames = Array.from(
+    new Set(displayedPVNames.map(ionChamberGasPressurePV).filter(Boolean)),
+  );
+  const configPVNames = Array.from(
+    new Set([...displayedPVNames, ...gasPressurePVNames]),
   );
 
   // Alias state (loaded from backend)
@@ -315,14 +322,14 @@ function ConfigPage() {
       <section style={{ marginBottom: "30px" }}>
         <h2>Current Layout</h2>
         <p>Active plots: {plots.length}</p>
-        <p>Monitored PVs: {displayedPVNames.length}</p>
+        <p>Monitored PVs: {configPVNames.length}</p>
         <p>Time window: {globalTimeWindow}s</p>
       </section>
 
       {/* PV Aliases */}
       <section>
         <h2>PV Aliases</h2>
-        {displayedPVNames.length === 0 ? (
+        {configPVNames.length === 0 ? (
           <p>No PVs are being monitored. Add some PVs first.</p>
         ) : (
           <>
@@ -412,9 +419,12 @@ function ConfigPage() {
                 </tr>
               </thead>
               <tbody>
-                {displayedPVNames.map((pvName) => {
+                {configPVNames.map((pvName) => {
                   const inPlot = plotPVNames.includes(pvName);
-                  const liveOnly = livePVNames.includes(pvName) && !inPlot;
+                  const liveOnly =
+                    (livePVNames.includes(pvName) ||
+                      gasPressurePVNames.includes(pvName)) &&
+                    !inPlot;
                   return (
                     <tr key={pvName}>
                       <td

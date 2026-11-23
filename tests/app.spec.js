@@ -5,6 +5,37 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear();
   });
 
+  await page.route("**/api/config/events**", (route) => route.abort());
+  await page.route("**/api/config-presets", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "access-control-allow-origin": "*" },
+      body: JSON.stringify({ files: ["config.json"] }),
+    }),
+  );
+  await page.route("**/api/config-presets/config.json", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "access-control-allow-origin": "*" },
+      body: JSON.stringify({
+        layouts: {
+          default: {
+            plots: [],
+            livePVNames: [],
+            globalTimeWindow: 60,
+            showBeamlineStatus: false,
+          },
+        },
+        aliases: { "BL22:GAS.IC2P": "IC2 Gas Pressure" },
+        egus: {},
+        thresholds: {},
+        value_formats: {},
+      }),
+    }),
+  );
+
   await page.goto("/");
 });
 
@@ -111,7 +142,25 @@ test("shows the matching gas pressure PV for an ion chamber ADC", async ({ page 
     .filter({ hasText: "BL22:SCAN:MASTER:ADC2" });
 
   await expect(adcPanel).toContainText("Gas Pressure");
-  await expect(adcPanel).toContainText("BL22:GAS:IC2P");
+  await expect(adcPanel).toContainText("IC2 Gas Pressure");
+
+  await page
+    .locator(".sidebar-alias-toggle")
+    .filter({ hasText: "Show PV Names" })
+    .click();
+  await expect(adcPanel).toContainText("BL22:GAS.IC2P");
+
+  await page
+    .getByRole("button", {
+      name: /PV Configurations/i,
+    })
+    .click();
+
+  const gasPressureRow = page
+    .locator("tr")
+    .filter({ hasText: "BL22:GAS.IC2P" });
+  await expect(gasPressureRow).toBeVisible();
+  await expect(gasPressureRow.getByPlaceholder("(no alias)")).toBeVisible();
 });
 
 test("clears all plots", async ({ page }) => {

@@ -12,5 +12,5 @@ export function ionChamberGasPressurePV(pvName) {
   const match = /^ADC([123])$/i.exec(recordField);
   if (!match) return null;
 
-  return `${beamline.toUpperCase()}:GAS:IC${match[1]}P`;
+  return `${beamline.toUpperCase()}:GAS.IC${match[1]}P`;
 }
