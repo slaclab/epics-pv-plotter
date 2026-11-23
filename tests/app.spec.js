@@ -248,3 +248,35 @@ test("clears all plots", async ({ page }) => {
     page.getByText("No plots yet")
   ).toBeVisible();
 });
+
+test("saves an empty layout as a new preset without patching the source", async ({ page }) => {
+  const saveRequests = [];
+  page.on("request", (request) => {
+    if (
+      request.url().includes("/api/config-presets/") &&
+      ["POST", "PATCH"].includes(request.method())
+    ) {
+      saveRequests.push(request);
+    }
+  });
+  await page.route(/\/api\/config-presets\/config4\.json/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok", filename: "config4.json" }),
+    }),
+  );
+
+  await page.getByLabel("New configuration filename").fill("config4.json");
+  await page.getByRole("button", { name: "Save As" }).click();
+
+  await expect(page.getByLabel("New configuration filename")).toHaveValue("");
+  expect(saveRequests).toHaveLength(1);
+  expect(saveRequests[0].method()).toBe("POST");
+  expect(new URL(saveRequests[0].url()).searchParams.get("source")).toBe(
+    "config.json",
+  );
+  expect(JSON.parse(saveRequests[0].postData()).layouts.default.plots).toEqual(
+    [],
+  );
+});

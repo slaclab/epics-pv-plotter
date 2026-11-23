@@ -224,6 +224,47 @@ def test_named_config_preset_can_be_created_as_a_copy(client):
     assert copied["layouts"]["default"]["plots"][0]["pvNames"] == ["A"]
 
 
+def test_saving_layout_as_preset_does_not_change_source(client):
+    source = config_router.CONFIG_FILE.parent / "config1.json"
+    original = {
+        "aliases": {"A": "I0"},
+        "layouts": {
+            "default": {
+                "plots": [{"id": 1, "pvNames": ["A"]}],
+                "livePVNames": ["A"],
+                "globalTimeWindow": 120,
+            }
+        },
+    }
+    source.write_text(json.dumps(original))
+
+    response = client.post(
+        "/api/config-presets/config3.json",
+        params={"source": "config1.json"},
+        json={
+            "layouts": {
+                "default": {
+                    "plots": [],
+                    "livePVNames": [],
+                    "globalTimeWindow": 60,
+                }
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(source.read_text()) == original
+    created = json.loads(
+        (config_router.CONFIG_FILE.parent / "config3.json").read_text()
+    )
+    assert created["aliases"] == {"A": "I0"}
+    assert created["layouts"]["default"] == {
+        "plots": [],
+        "livePVNames": [],
+        "globalTimeWindow": 60,
+    }
+
+
 def test_fresh_install_creates_default_preset(tmp_path, monkeypatch):
     config_dir = tmp_path / "configs"
     monkeypatch.setattr(config_router, "CONFIG_FILE", config_dir / "config.json")

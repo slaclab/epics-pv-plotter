@@ -238,11 +238,17 @@ async def get_config_preset(filename: str):
 
 
 @router.post("/config-presets/{filename}")
-async def create_config_preset(filename: str, source: str | None = None):
-    """create a named preset, optionally as a copy of an existing preset"""
+async def create_config_preset(
+    filename: str,
+    source: str | None = None,
+    updates: Dict[str, Any] | None = None,
+):
+    """create a named preset, optionally copying and updating an existing preset"""
     preset_path = _preset_path_placeholder(filename)
     source_path = _preset_path(source) if source else CONFIG_FILE
     source_config = _read_config_file(source_path)
+    if updates is not None:
+        _merge_config_updates(source_config, updates)
 
     with config_lock(preset_path):
         if preset_path.exists():
@@ -257,17 +263,17 @@ def _preset_path_placeholder(filename: str) -> Path:
     return CONFIG_FILE.parent / filename
 
 
-@router.patch("/config-presets/{filename}")
-async def update_config_preset(filename: str, updates: Dict[str, Any]):
-    """update selected configuration sections without replacing other sections"""
-    allowed_sections = {
-        "aliases",
-        "egus",
-        "thresholds",
-        "value_formats",
-        "layouts",
-    }
-    if not updates or updates.keys() - allowed_sections:
+_PRESET_UPDATE_SECTIONS = {
+    "aliases",
+    "egus",
+    "thresholds",
+    "value_formats",
+    "layouts",
+}
+
+
+def _merge_config_updates(config: dict, updates: Dict[str, Any]) -> None:
+    if not updates or updates.keys() - _PRESET_UPDATE_SECTIONS:
         raise HTTPException(status_code=422, detail="Invalid configuration sections")
     if any(not isinstance(value, dict) for value in updates.values()):
         raise HTTPException(
@@ -275,18 +281,24 @@ async def update_config_preset(filename: str, updates: Dict[str, Any]):
         )
     _validate_preset_updates(updates)
 
+    for section, values in updates.items():
+        current = config.get(section)
+        if not isinstance(current, dict):
+            current = {}
+            config[section] = current
+        for key, value in values.items():
+            if value is None:
+                current.pop(key, None)
+            else:
+                current[key] = value
+
+
+@router.patch("/config-presets/{filename}")
+async def update_config_preset(filename: str, updates: Dict[str, Any]):
+    """update selected configuration sections without replacing other sections"""
     preset_path = _preset_path(filename)
     with edit_config(preset_path, strict=True) as config:
-        for section, values in updates.items():
-            current = config.get(section)
-            if not isinstance(current, dict):
-                current = {}
-                config[section] = current
-            for key, value in values.items():
-                if value is None:
-                    current.pop(key, None)
-                else:
-                    current[key] = value
+        _merge_config_updates(config, updates)
     return {"status": "ok"}
 
 

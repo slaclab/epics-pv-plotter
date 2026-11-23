@@ -117,29 +117,22 @@ export default function PlotGrid({ onLayoutLoaded }) {
     setIsSavingConfig(true);
     setConfigError("");
     try {
-      const layoutResponse = await fetch(configPresetUrl(activeConfigFile), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          layouts: {
-            default: {
-              plots,
-              livePVNames: usePlotStore.getState().livePVNames,
-              globalTimeWindow: usePlotStore.getState().globalTimeWindow,
-            },
-          },
-        }),
-      });
-      if (!layoutResponse.ok) {
-        throw new Error(
-          `Could not save the current layout (HTTP ${layoutResponse.status})`,
-        );
-      }
-
       const params = new URLSearchParams({ source: activeConfigFile });
       const response = await fetch(
         `${configPresetUrl(filename)}?${params.toString()}`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            layouts: {
+              default: {
+                plots,
+                livePVNames: usePlotStore.getState().livePVNames,
+                globalTimeWindow: usePlotStore.getState().globalTimeWindow,
+              },
+            },
+          }),
+        },
       );
       if (!response.ok) {
         const detail = await response.json().catch(() => null);
