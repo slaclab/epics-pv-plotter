@@ -126,6 +126,57 @@ test("adds multiple PVs to one plot", async ({ page }) => {
   await expect(sidebar).toContainText("TEST:PV:02");
 });
 
+test("edits the PVs in a multi-PV plot", async ({ page }) => {
+  await page
+    .getByPlaceholder(/Enter PV name/i)
+    .fill("TEST:PV:01,TEST:PV:02");
+
+  await page
+    .getByRole("button", {
+      name: /Add Plot/i,
+    })
+    .click();
+
+  await page
+    .getByRole("button", {
+      name: /Edit PVs in this plot/i,
+    })
+    .click();
+
+  const dialog = page.getByRole("dialog", {
+    name: /Edit PVs in this plot/i,
+  });
+  await expect(dialog).toBeVisible();
+
+  await dialog
+    .getByRole("button", {
+      name: "Remove TEST:PV:02",
+    })
+    .click();
+
+  await dialog
+    .getByLabel("New PV name")
+    .fill("TEST:PV:03");
+  await dialog
+    .getByRole("button", {
+      name: "Add PV",
+    })
+    .click();
+
+  await dialog
+    .getByRole("button", {
+      name: "Confirm",
+    })
+    .click();
+
+  await expect(dialog).toHaveCount(0);
+
+  const sidebar = page.locator(".right-sidebar");
+  await expect(sidebar).toContainText("TEST:PV:01");
+  await expect(sidebar).not.toContainText("TEST:PV:02");
+  await expect(sidebar).toContainText("TEST:PV:03");
+});
+
 test("shows the matching gas pressure PV for an ion chamber ADC", async ({ page }) => {
   await page
     .getByPlaceholder(/Enter PV name/i)

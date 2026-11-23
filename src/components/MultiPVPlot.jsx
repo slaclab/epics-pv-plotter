@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
-import { X, Wifi, WifiOff, AlertCircle, Download } from "lucide-react";
+import { X, Wifi, WifiOff, AlertCircle, Download, Pencil } from "lucide-react";
 
 import { DataBuffer } from "../services/DataBuffer";
 import { pvConnectionPool } from "../services/PVConnectionPool";
@@ -28,6 +28,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const [inputValue, setInputValue] = useState("");
 
   const [displayText, setDisplayText] = useState("");
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [draftPVNames, setDraftPVNames] = useState([]);
+  const [newPVName, setNewPVName] = useState("");
 
   //Load Aliases, EGU and value formats from backend
   const [egus, setEgus] = useState({});
@@ -154,6 +157,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const removePlot = usePlotStore((state) => state.removePlot);
 
   const removePVFromPlot = usePlotStore((state) => state.removePVFromPlot);
+  const setPVNamesForPlot = usePlotStore(
+    (state) => state.setPVNamesForPlot,
+  );
 
   const timeSyncEnabled = usePlotStore((state) => state.timeSyncEnabled);
 
@@ -162,6 +168,45 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const plotsPaused = usePlotStore((state) => state.plotsPaused);
 
   const getTraceColor = (pvName) => getPVColor(pvName);
+
+  const openPVEditor = () => {
+    setDraftPVNames([...pvNames]);
+    setNewPVName("");
+    setIsEditOpen(true);
+  };
+
+  const closePVEditor = () => {
+    setIsEditOpen(false);
+    setNewPVName("");
+  };
+
+  const removeDraftPV = (pvName) => {
+    setDraftPVNames((currentNames) =>
+      currentNames.filter((name) => name !== pvName),
+    );
+  };
+
+  const addDraftPV = () => {
+    const namesToAdd = newPVName
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+
+    if (namesToAdd.length === 0) {
+      return;
+    }
+
+    setDraftPVNames((currentNames) =>
+      Array.from(new Set([...currentNames, ...namesToAdd]))
+    );
+    setNewPVName("");
+  };
+
+  const confirmPVChanges = () => {
+    setPVNamesForPlot(plotId, draftPVNames);
+    setIsEditOpen(false);
+    setNewPVName("");
+  };
 
   const exportData = (pvName) => {
     const buffer = buffersRef.current[pvName];
@@ -741,6 +786,15 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         <div className="plot-actions">
           <button
             className="plot-action-btn"
+            onClick={openPVEditor}
+            title="Edit PVs in this plot"
+            aria-label="Edit PVs in this plot"
+          >
+            <Pencil size={16} />
+          </button>
+
+          <button
+            className="plot-action-btn"
             onClick={exportAllData}
             title="Export data to CSV"
           >
@@ -760,6 +814,94 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       <div className="plot-container">
         <div ref={plotContainerRef} className="uplot-host" />
       </div>
+
+      {isEditOpen && (
+        <div
+          className="pv-edit-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closePVEditor();
+            }
+          }}
+        >
+          <div
+            className="pv-edit-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`pv-edit-title-${plotId}`}
+          >
+            <div className="pv-edit-header">
+              <h2 id={`pv-edit-title-${plotId}`}>Edit PVs in this plot</h2>
+              <button
+                type="button"
+                className="pv-edit-close"
+                onClick={closePVEditor}
+                aria-label="Close edit PV window"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="pv-edit-list">
+              {draftPVNames.length === 0 ? (
+                <p className="pv-edit-empty">No PVs in this plot.</p>
+              ) : (
+                draftPVNames.map((pvName) => (
+                  <div className="pv-edit-row" key={pvName}>
+                    <span className="pv-edit-name">{pvName}</span>
+                    <button
+                      type="button"
+                      className="pv-edit-remove"
+                      onClick={() => removeDraftPV(pvName)}
+                      aria-label={`Remove ${pvName}`}
+                      title={`Remove ${pvName}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pv-edit-add">
+              <input
+                type="text"
+                value={newPVName}
+                onChange={(event) => setNewPVName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addDraftPV();
+                  }
+                }}
+                placeholder="Enter PV name(s), separated by commas"
+                aria-label="New PV name"
+              />
+              <button type="button" onClick={addDraftPV}>
+                Add PV
+              </button>
+            </div>
+
+            <div className="pv-edit-actions">
+              <button
+                type="button"
+                className="pv-edit-cancel"
+                onClick={closePVEditor}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pv-edit-confirm"
+                onClick={confirmPVChanges}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

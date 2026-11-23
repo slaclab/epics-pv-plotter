@@ -1,6 +1,7 @@
 /* src/components/MultiPVPlot.css */
 
 .plot-widget {
+  position: relative;
   background: white;
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -192,6 +193,144 @@
   margin-left: 0.25rem;
 }
 
+.pv-edit-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.pv-edit-modal {
+  width: min(520px, 100%);
+  max-height: calc(100% - 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+}
+
+.pv-edit-header,
+.pv-edit-actions,
+.pv-edit-row,
+.pv-edit-add {
+  display: flex;
+  align-items: center;
+}
+
+.pv-edit-header,
+.pv-edit-actions {
+  justify-content: space-between;
+}
+
+.pv-edit-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.pv-edit-close,
+.pv-edit-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #64748b;
+  border-radius: 5px;
+}
+
+.pv-edit-close {
+  padding: 0.35rem;
+}
+
+.pv-edit-close:hover,
+.pv-edit-remove:hover {
+  background: #f1f5f9;
+  color: #dc3545;
+}
+
+.pv-edit-list {
+  min-height: 56px;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pv-edit-row {
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.pv-edit-name {
+  overflow-wrap: anywhere;
+  font-family: "Courier New", monospace;
+}
+
+.pv-edit-remove {
+  flex-shrink: 0;
+  padding: 0.35rem;
+  color: #dc3545;
+}
+
+.pv-edit-empty {
+  margin: 0;
+  color: #64748b;
+}
+
+.pv-edit-add {
+  gap: 0.5rem;
+}
+
+.pv-edit-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+
+.pv-edit-add button,
+.pv-edit-actions button {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  background: white;
+  font-weight: 600;
+}
+
+.pv-edit-add button:hover,
+.pv-edit-cancel:hover {
+  background: #f1f5f9;
+}
+
+.pv-edit-actions {
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.pv-edit-confirm {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: white;
+}
+
+.pv-edit-confirm:hover {
+  background: #1d4ed8 !important;
+}
 
 .live-stats {
   display: flex;

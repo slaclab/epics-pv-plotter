@@ -215,6 +215,52 @@ export const usePlotStore = create(
         console.log(`PV removed: ${pvName} from plot ${plotId}`);
       },
 
+      // Replace a plot's PV list with the editor's confirmed draft.
+      setPVNamesForPlot: (plotId, pvNames) => {
+        const normalizedNames = Array.from(
+          new Set(
+            (Array.isArray(pvNames) ? pvNames : [pvNames])
+              .map((pvName) => pvName.trim())
+              .filter(Boolean),
+          ),
+        );
+        const currentPlots = get().plots;
+
+        if (normalizedNames.length === 0) {
+          const remainingPlots = currentPlots.filter(
+            (plot) => plot.id !== plotId,
+          );
+          if (remainingPlots.length === currentPlots.length) {
+            return;
+          }
+          set({ plots: repackPlots(remainingPlots) });
+          return;
+        }
+
+        let changed = false;
+        const nextPlots = currentPlots.map((plot) => {
+          if (plot.id !== plotId) {
+            return plot;
+          }
+
+          if (
+            plot.pvNames.length === normalizedNames.length &&
+            plot.pvNames.every((pvName, index) =>
+              pvName === normalizedNames[index]
+            )
+          ) {
+            return plot;
+          }
+
+          changed = true;
+          return { ...plot, pvNames: normalizedNames };
+        });
+
+        if (changed) {
+          set({ plots: nextPlots });
+        }
+      },
+
       // Update plot positions and sizes only when the layout changed
       updateLayout: (newLayout) => {
         const currentPlots = get().plots;
