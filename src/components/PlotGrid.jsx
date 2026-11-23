@@ -177,7 +177,6 @@ export default function PlotGrid({ onLayoutLoaded }) {
 
   return (
     <div className="plot-grid-container">
-      {configControls}
       <ResponsiveGridLayout
         className="plot-grid"
         layouts={{ lg: layout }}
