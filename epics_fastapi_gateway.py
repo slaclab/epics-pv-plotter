@@ -27,6 +27,7 @@ from routers import config as config_router
 from routers import thresholds as thresholds_router
 from routers import energy as energy_router
 from routers import layout_ops as layout_ops_router
+from routers import spear_status as spear_status_router
 from caproto.asyncio.client import Context
 import numpy as np
 
@@ -141,6 +142,7 @@ app.include_router(config_router.router)
 app.include_router(layout_ops_router.router)
 app.include_router(thresholds_router.router)
 app.include_router(energy_router.router)
+app.include_router(spear_status_router.router)
 
 # Enable CORS to allow frontend applications from different origins
 app.add_middleware(
