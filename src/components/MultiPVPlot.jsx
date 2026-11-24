@@ -7,6 +7,7 @@ import { X, Wifi, WifiOff, AlertCircle, Download, Pencil } from "lucide-react";
 import { DataBuffer } from "../services/DataBuffer";
 import { pvConnectionPool } from "../services/PVConnectionPool";
 import {
+  API_BASE,
   PLOT_CONFIG,
   PLOT_THEME,
   getPVColor,
@@ -24,6 +25,7 @@ import "./MultiPVPlot.css";
 
 export default function MultiPVPlot({ plotId, pvNames }) {
   const SHOW_PV_TAGS = false;
+  const hasSpearBeamCurrent = pvNames.includes("SPEAR:BeamCurrAvg");
 
   const [inputValue, setInputValue] = useState("");
 
@@ -36,6 +38,9 @@ export default function MultiPVPlot({ plotId, pvNames }) {
   const [egus, setEgus] = useState({});
   const [aliases, setAliases] = useState({});
   const [valueFormats, setValueFormats] = useState({});
+  const [spearMessages, setSpearMessages] = useState(null);
+  const [spearTime, setSpearTime] = useState("");
+  const [spearMessageError, setSpearMessageError] = useState("");
   const badTimestampWarnedRef = useRef(false);
   const settingsRevision = usePlotStore((state) => state.settingsRevision);
   const activeConfigFile = usePlotStore((state) => state.activeConfigFile);
@@ -66,6 +71,52 @@ export default function MultiPVPlot({ plotId, pvNames }) {
       active = false;
     };
   }, [settingsRevision, activeConfigFile]);
+
+  useEffect(() => {
+    if (!hasSpearBeamCurrent) {
+      setSpearMessages(null);
+      setSpearTime("");
+      setSpearMessageError("");
+      return undefined;
+    }
+
+    let active = true;
+    const loadMessages = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/spear-messages`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!Array.isArray(data.messages) || typeof data.TIME !== "string") {
+          throw new Error("The server returned an invalid SPEAR message list");
+        }
+
+        if (active) {
+          setSpearMessages(data.messages);
+          setSpearTime(data.TIME);
+          setSpearMessageError("");
+        }
+      } catch (error) {
+        if (active) {
+          console.error("Failed to load SPEAR status messages:", error);
+          setSpearMessageError("SPEAR messages are unavailable");
+        }
+      }
+    };
+
+    setSpearMessages(null);
+    setSpearTime("");
+    setSpearMessageError("");
+    loadMessages();
+    const refreshTimer = setInterval(loadMessages, 120_000);
+
+    return () => {
+      active = false;
+      clearInterval(refreshTimer);
+    };
+  }, [hasSpearBeamCurrent]);
 
   //
   const [showAlias, setShowAlias] = useState(true);
@@ -707,6 +758,10 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         return <WifiOff size={14} className="status-icon connecting" />;
     }
   };
+  const visibleSpearMessages = (spearMessages ?? []).filter(
+    (message) => message.message.trim() !== "",
+  );
+
   return (
     <div className="plot-widget">
       <div className="plot-header">
@@ -811,8 +866,41 @@ export default function MultiPVPlot({ plotId, pvNames }) {
         </div>
       </div>
 
-      <div className="plot-container">
+      <div
+        className={`plot-container${
+          hasSpearBeamCurrent ? " plot-container-with-messages" : ""
+        }`}
+      >
         <div ref={plotContainerRef} className="uplot-host" />
+        {hasSpearBeamCurrent && (
+          <div
+            className="spear-messages"
+            role={spearMessageError ? "alert" : "status"}
+            aria-live="polite"
+          >
+            {spearMessageError ? (
+              spearMessageError
+            ) : spearMessages === null ? (
+              "Loading SPEAR messages..."
+            ) : visibleSpearMessages.length > 0 ? (
+              <>
+                <p className="spear-current-time">
+                  <span>TIME:</span>
+                  <time>{spearTime}</time>
+                </p>
+                {visibleSpearMessages.map((message, index) => (
+                  <p
+                    className="spear-message"
+                    key={`${message.activationDate}-${index}`}
+                  >
+                    <time>{message.activationDate}</time>
+                    <span>{message.message}</span>
+                  </p>
+                ))}
+              </>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {isEditOpen && (
