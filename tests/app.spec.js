@@ -133,7 +133,8 @@ test("adds multiple PVs to one plot", async ({ page }) => {
   await expect(sidebar).toContainText("TEST:PV:02");
 });
 
-test("overlays SPEAR operator messages on beam current plots", async ({ page }) => {
+test("shows and wraps SPEAR operator messages below the beamline status table", async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 800 });
   await page.route(/\/api\/spear-messages/, (route) =>
     route.fulfill({
       status: 200,
@@ -143,49 +144,35 @@ test("overlays SPEAR operator messages on beam current plots", async ({ page }) 
         messages: [
           {
             activationDate: "Nov 23, 2026",
-            message: "Beam current stable",
+            message:
+              "Beam current stable while operators prepare the next injection cycle; please monitor beamline conditions before proceeding.",
           },
         ],
       }),
     }),
   );
 
-  await page.getByPlaceholder(/Enter PV name/i).fill("SPEAR:BeamCurrAvg");
-  await page.locator(".control-panel .btn-primary").click();
+  await page.getByRole("button", { name: "Show", exact: true }).click();
 
-  const message = page.locator(
-    ".plot-container-with-messages .spear-messages",
-  );
+  const message = page.locator(".beamline-spear-messages");
   await expect(message).toContainText("TIME:");
   await expect(message).toContainText("23-Nov-2026 15:32:43");
   await expect(message).toContainText("Nov 23, 2026");
-  await expect(message).toContainText("Beam current stable");
+  await expect(message).toContainText(
+    "Beam current stable while operators prepare the next injection cycle; please monitor beamline conditions before proceeding.",
+  );
+  await expect(
+    page.locator(".beamline-spear-message-row td"),
+  ).toHaveCSS("overflow-wrap", "anywhere");
 
-  const plotContainerBox = await page
-    .locator(".plot-container-with-messages")
-    .boundingBox();
-  const messageBox = await message.boundingBox();
-  expect(messageBox.x).toBeGreaterThanOrEqual(plotContainerBox.x);
-  expect(messageBox.y).toBeGreaterThanOrEqual(plotContainerBox.y);
-  expect(messageBox.x + messageBox.width).toBeLessThanOrEqual(
-    plotContainerBox.x + plotContainerBox.width,
-  );
-  expect(messageBox.y + messageBox.height).toBeLessThanOrEqual(
-    plotContainerBox.y + plotContainerBox.height,
-  );
+  await expect(
+    page.locator(".beamline-status-table tr").last(),
+  ).toContainText("Beam current stable");
 });
 
-test("shows no message when SPEAR messages are empty", async ({ page }) => {
-  await page.getByPlaceholder(/Enter PV name/i).fill("SPEAR:BeamCurrAvg");
-  await page.locator(".control-panel .btn-primary").click();
-
-  const overlay = page.locator(
-    ".plot-container-with-messages .spear-messages",
-  );
-  await expect(overlay).not.toContainText("TIME:");
-  await expect(overlay).not.toContainText("No operator message.");
-  await expect(overlay.locator(".spear-current-time")).toHaveCount(0);
-  await expect(overlay.locator(".spear-message")).toHaveCount(0);
+test("hides the SPEAR row when there are no messages", async ({ page }) => {
+  await page.getByRole("button", { name: "Show", exact: true }).click();
+  await expect(page.locator(".beamline-spear-message-row")).toHaveCount(0);
 });
 
 test("edits the PVs in a multi-PV plot", async ({ page }) => {

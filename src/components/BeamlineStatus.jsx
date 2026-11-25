@@ -1,9 +1,10 @@
 // src/components/BeamlineStatus.jsx
 // Open/Closed status lights for every beamline, read from BLxx:OpenState.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { pvConnectionPool } from "../services/PVConnectionPool";
 import { useLiveValueStore } from "../stores/useLiveValueStore";
+import { API_BASE } from "../utils/constants";
 import "./BeamlineStatus.css";
 
 const BEAMLINE_COUNT = 17;
@@ -46,6 +47,10 @@ function BeamlineLight({ pvName }) {
 }
 
 function BeamlineStatus() {
+  const [spearMessages, setSpearMessages] = useState(null);
+  const [spearTime, setSpearTime] = useState("");
+  const [spearMessageError, setSpearMessageError] = useState("");
+
   useEffect(() => {
     const unsubscribers = BEAMLINES.map(({ pvName }) =>
       pvConnectionPool.subscribe(pvName, {
@@ -63,6 +68,46 @@ function BeamlineStatus() {
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadMessages = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/spear-messages`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!Array.isArray(data.messages) || typeof data.TIME !== "string") {
+          throw new Error("The server returned an invalid SPEAR message list");
+        }
+
+        if (active) {
+          setSpearMessages(data.messages);
+          setSpearTime(data.TIME);
+          setSpearMessageError("");
+        }
+      } catch (error) {
+        if (active) {
+          console.error("Failed to load SPEAR status messages:", error);
+          setSpearMessageError("SPEAR messages are unavailable");
+        }
+      }
+    };
+
+    loadMessages();
+    const refreshTimer = setInterval(loadMessages, 120_000);
+
+    return () => {
+      active = false;
+      clearInterval(refreshTimer);
+    };
+  }, []);
+
+  const visibleSpearMessages = (spearMessages ?? []).filter(
+    (message) => message.message.trim() !== "",
+  );
 
   return (
     <div className="beamline-status-panel">
@@ -82,6 +127,42 @@ function BeamlineStatus() {
               </td>
             ))}
           </tr>
+          {(spearMessageError ||
+            spearMessages === null ||
+            visibleSpearMessages.length > 0) && (
+            <tr className="beamline-spear-message-row">
+              <th scope="row">SPEAR</th>
+              <td colSpan={BEAMLINES.length}>
+                <div
+                  className="beamline-spear-messages"
+                  role={spearMessageError ? "alert" : "status"}
+                  aria-live="polite"
+                >
+                  {spearMessageError ? (
+                    spearMessageError
+                  ) : spearMessages === null ? (
+                    "Loading SPEAR messages..."
+                  ) : (
+                    <>
+                      <p className="beamline-spear-current-time">
+                        <span>TIME:</span>
+                        <time>{spearTime}</time>
+                      </p>
+                      {visibleSpearMessages.map((message, index) => (
+                        <p
+                          className="beamline-spear-message"
+                          key={`${message.activationDate}-${index}`}
+                        >
+                          <time>{message.activationDate}</time>
+                          <span>{message.message}</span>
+                        </p>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
