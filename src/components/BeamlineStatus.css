@@ -49,11 +49,19 @@
   margin: 0;
 }
 
+.beamline-spear-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
 .beamline-spear-current-time,
 .beamline-spear-message {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.5rem;
+  flex: 0 0 auto;
+  gap: 0.5rem;
 }
 
 .beamline-spear-message + .beamline-spear-message {

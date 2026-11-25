@@ -143,21 +143,21 @@ function BeamlineStatus() {
                   ) : spearMessages === null ? (
                     "Loading SPEAR messages..."
                   ) : (
-                    <>
-                      <p className="beamline-spear-current-time">
+                    <p className="beamline-spear-line">
+                      <span className="beamline-spear-current-time">
                         <span>TIME:</span>
                         <time>{spearTime}</time>
-                      </p>
+                      </span>
                       {visibleSpearMessages.map((message, index) => (
-                        <p
+                        <span
                           className="beamline-spear-message"
                           key={`${message.activationDate}-${index}`}
                         >
                           <time>{message.activationDate}</time>
                           <span>{message.message}</span>
-                        </p>
+                        </span>
                       ))}
-                    </>
+                    </p>
                   )}
                 </div>
               </td>
