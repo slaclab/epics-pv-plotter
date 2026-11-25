@@ -5,29 +5,24 @@
 # Can be run manually for testing, or invoked by systemd.
 #
 
-set -e   # Exit on error
+set -e
 
-# ------------------------------------------------------------
-# 1. load nvm（important: let node/npm available）
-# ------------------------------------------------------------
-export NVM_DIR="/home/b_bluesky/.nvm"
-# shellcheck disable=SC1091
-[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/package.json" ]]; then
+    APP_DIR="$SCRIPT_DIR"
+else
+    APP_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+fi
 
-# use the correct version of  node （ which node ）
-nvm use v20.11.1 >/dev/null 2>&1 || true
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$NVM_DIR/nvm.sh"
+    nvm use v20.11.1 >/dev/null 2>&1 || true
+fi
 
-# add node bin to PATH
-export PATH="/home/b_bluesky/.nvm/versions/node/v20.11.1/bin:$PATH"
+cd "$APP_DIR"
 
-# ------------------------------------------------------------
-# 2. get into main directory
-# ------------------------------------------------------------
-cd /home/b_bluesky/Documents/epics-pv-plotter
-
-# ------------------------------------------------------------
-# 3. print out details
-# ------------------------------------------------------------
 echo "=========================================="
 echo " Starting EPICS PV Plotter Frontend"
 echo " node: $(which node)  ($(node -v))"
@@ -35,10 +30,6 @@ echo " npm : $(which npm)   ($(npm -v))"
 echo " cwd : $(pwd)"
 echo "=========================================="
 
-# ------------------------------------------------------------
-# 4. Start Vite dev server
-#    exec let npm process shell，used for  systemd to manage ongoing processes
-# ------------------------------------------------------------
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-5175}"
 exec npm run dev -- --host "$HOST" --port "$PORT"

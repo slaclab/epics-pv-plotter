@@ -35,6 +35,9 @@ Options:
 Run on the intermediate server that has the current repository checkout and
 can SSH directly to its Pi(s). Only calc/, routers/, src/, and
 epics_fastapi_gateway.py are copied into ~/Documents/epics-pv-plotter.
+When restarting the frontend service, scripts/start-frontend.sh is copied to
+the application root as its launcher.
+SSH and sudo may prompt for passwords during deployment.
 EOF
 }
 
@@ -104,6 +107,10 @@ for path in calc routers src; do
 done
 [[ -f "$REPO_DIR/epics_fastapi_gateway.py" ]] ||
     fail "missing source file: $REPO_DIR/epics_fastapi_gateway.py"
+if [[ "$FRONTEND_SERVICE" != "none" ]]; then
+    [[ -f "$REPO_DIR/scripts/start-frontend.sh" ]] ||
+        fail "missing source file: $REPO_DIR/scripts/start-frontend.sh"
+fi
 if ((NGINX_FRONTEND == 1)); then
     command -v npm >/dev/null || fail "npm is required to build the nginx frontend"
     printf 'Building frontend for nginx...\n'
@@ -148,8 +155,23 @@ else
     done
 fi
 
-SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15)
-RSYNC_RSH="ssh -o BatchMode=yes -o ConnectTimeout=15"
+SSH_CONTROL_DIR="$(mktemp -d /tmp/deploy-beamline-pis.XXXXXX)" ||
+    fail "could not create SSH control directory"
+SSH_OPTS=(-o ConnectTimeout=15 -o PubkeyAuthentication=no
+    -o PreferredAuthentications=keyboard-interactive,password
+    -o ControlMaster=auto -o ControlPersist=60 -o ClearAllForwardings=yes
+    -o "ControlPath=$SSH_CONTROL_DIR/%C")
+RSYNC_RSH="ssh -o ConnectTimeout=15 -o PubkeyAuthentication=no -o PreferredAuthentications=keyboard-interactive,password -o ControlMaster=auto -o ControlPersist=60 -o ClearAllForwardings=yes -o ControlPath=$SSH_CONTROL_DIR/%C"
+
+cleanup_ssh_control() {
+    for index in "${TARGET_INDICES[@]}"; do
+        local target="${PI_USERS[$index]}@${PI_HOSTS[$index]}"
+        ssh -o BatchMode=yes "${SSH_OPTS[@]}" -O exit "$target" >/dev/null 2>&1 || true
+    done
+    rmdir "$SSH_CONTROL_DIR" 2>/dev/null || true
+}
+trap cleanup_ssh_control EXIT
+
 REMOTE_APP_PATH="Documents/epics-pv-plotter"
 
 deploy_one() {
@@ -187,20 +209,19 @@ deploy_one() {
         return 1
     fi
 
+    if [[ "$FRONTEND_SERVICE" != "none" ]]; then
+        if ! rsync -a -e "$RSYNC_RSH" \
+            "$REPO_DIR/scripts/start-frontend.sh" \
+            "$target:$REMOTE_APP_PATH/start-frontend.sh"; then
+            printf 'Failed to copy frontend launcher to %s\n' "$beamline" >&2
+            return 1
+        fi
+    fi
+
     if ((NGINX_FRONTEND == 1)); then
         if ! rsync -a --delete -e "$RSYNC_RSH" \
             "$REPO_DIR/dist/" "$target:$REMOTE_APP_PATH/$remote_stage/"; then
             printf 'Failed to copy frontend build to %s\n' "$beamline" >&2
-            return 1
-        fi
-        if ! ssh "${SSH_OPTS[@]}" "$target" \
-            "sudo -n rsync -a --delete -- \"\$HOME/$REMOTE_APP_PATH/$remote_stage/\" /var/www/epics-pv-plotter/"; then
-            printf 'Source copied, but nginx frontend publication failed on %s\n' "$beamline" >&2
-            return 1
-        fi
-        if ! ssh "${SSH_OPTS[@]}" "$target" \
-            "rm -rf -- \"\$HOME/$REMOTE_APP_PATH/$remote_stage\""; then
-            printf 'Frontend published, but staging cleanup failed on %s\n' "$beamline" >&2
             return 1
         fi
     fi
@@ -210,8 +231,12 @@ deploy_one() {
         restart_units+=("$FRONTEND_SERVICE")
     fi
     local remote_commands=""
+    if ((NGINX_FRONTEND == 1)); then
+        remote_commands+="sudo rsync -a --delete -- \"\$HOME/$REMOTE_APP_PATH/$remote_stage/\" /var/www/epics-pv-plotter/ || exit; "
+        remote_commands+="rm -rf -- \"\$HOME/$REMOTE_APP_PATH/$remote_stage\" || exit; "
+    fi
     for unit in "${restart_units[@]}"; do
-        remote_commands+="sudo -n systemctl restart '$unit' || exit; "
+        remote_commands+="sudo systemctl restart '$unit' || exit; "
     done
     for unit in "${restart_units[@]}"; do
         remote_commands+="systemctl is-active '$unit' || exit; "
@@ -219,8 +244,8 @@ deploy_one() {
     if ((NGINX_FRONTEND == 1)); then
         remote_commands+="systemctl is-active nginx || exit; "
     fi
-    if ! ssh "${SSH_OPTS[@]}" "$target" "$remote_commands"; then
-        printf 'Deployment actions completed, but a service health check failed on %s\n' "$beamline" >&2
+    if ! ssh -tt "${SSH_OPTS[@]}" "$target" "$remote_commands"; then
+        printf 'Deployment commands or service health checks failed on %s\n' "$beamline" >&2
         return 1
     fi
 
