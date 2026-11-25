@@ -145,8 +145,8 @@ function BeamlineStatus() {
                   ) : (
                     <p className="beamline-spear-line">
                       <span className="beamline-spear-current-time">
-                        <span>TIME:</span>
-                        <time>{spearTime}</time>
+                        <span className="beamline-spear-time-label">TIME:</span>
+			  {/*<time>{spearTime}</time>*/}
                       </span>
                       {visibleSpearMessages.map((message, index) => (
                         <span

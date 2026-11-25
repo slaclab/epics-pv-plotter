@@ -164,6 +164,18 @@ test("shows and wraps SPEAR operator messages below the beamline status table", 
   await expect(
     page.locator(".beamline-spear-message-row td"),
   ).toHaveCSS("overflow-wrap", "anywhere");
+  await expect(
+    page.locator(".beamline-spear-current-time time"),
+  ).toHaveCSS("color", "rgb(255, 87, 51)");
+  await expect(
+    page.locator(".beamline-spear-message time"),
+  ).toHaveCSS("color", "rgb(255, 87, 51)");
+  await expect(
+    page.locator(".beamline-spear-time-label"),
+  ).toHaveCSS("font-size", "16px");
+  await expect(
+    page.locator(".beamline-spear-current-time"),
+  ).toHaveCSS("align-items", "baseline");
 
   await expect(
     page.locator(".beamline-status-table tr").last(),

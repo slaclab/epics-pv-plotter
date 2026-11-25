@@ -43,10 +43,12 @@
   white-space: normal;
   overflow-wrap: anywhere;
   font-weight: 400;
+  color: rgb(255, 87, 51);
 }
 
 .beamline-spear-messages p {
   margin: 0;
+  color: rgb(255, 87, 51);
 }
 
 .beamline-spear-line {
@@ -55,23 +57,33 @@
   flex-wrap: nowrap;
   gap: 0.5rem;
   white-space: nowrap;
+  color: rgb(255, 87, 51);
 }
 
 .beamline-spear-current-time,
 .beamline-spear-message {
   display: flex;
+  align-items: baseline;
   flex: 0 0 auto;
   gap: 0.5rem;
+  font-size: 1.5rem;
+  color: rgb(255, 87, 51);
+
 }
 
 .beamline-spear-message + .beamline-spear-message {
   margin-top: 0.25rem;
+  font-size: 2.5rem;
 }
 
 .beamline-spear-current-time time,
 .beamline-spear-message time {
   flex: 0 0 auto;
-  color: #64748b;
+  color: rgb(255, 87, 51);
+}
+
+.beamline-spear-time-label {
+  font-size: 1.5rem;
 }
 
 .beamline-light {
